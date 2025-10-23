@@ -14,14 +14,22 @@ import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard'
 import { PharmacyDetailPage } from './pages/pharmacy/PharmacyDetailPage'
 import { AnalyticsPage } from './pages/analytics/AnalyticsPage'
 import { AuditLogsPage } from './pages/admin/AuditLogsPage'
-import { useAuthRoleGuard } from './store/auth'
+import { ServerStatusPage } from './pages/admin/ServerStatusPage'
+import { useAuth } from './hooks/useApi'
 
 const queryClient = new QueryClient()
 
 function RoleRoute({ children, allow }: { children: React.ReactNode; allow: Array<'admin' | 'receptionist' | 'doctor' | 'pharmacist' | 'patient'> }) {
-  const { role } = useAuthRoleGuard()
-  if (!role) return <Navigate to="/login" replace />
-  if (!allow.includes(role)) return <Navigate to="/" replace />
+  const { isAuthenticated, user } = useAuth()
+  
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />
+  }
+  
+  if (!allow.includes(user.role)) {
+    return <Navigate to="/" replace />
+  }
+  
   return <>{children}</>
 }
 
@@ -106,6 +114,14 @@ export default function App() {
               element={
                 <RoleRoute allow={["admin"]}>
                   <AuditLogsPage />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="status"
+              element={
+                <RoleRoute allow={["admin"]}>
+                  <ServerStatusPage />
                 </RoleRoute>
               }
             />

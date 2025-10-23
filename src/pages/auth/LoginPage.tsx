@@ -1,28 +1,181 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '../../store/auth'
 import { useNavigate } from 'react-router-dom'
+import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'admin'|'receptionist'|'doctor'|'pharmacist'|'patient'>('admin')
-  const { login } = useAuthStore()
+  const [showPassword, setShowPassword] = useState(false)
+  const { login, isLoading, error, clearError, isAuthenticated, user } = useAuthStore()
   const navigate = useNavigate()
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const redirectMap: Record<string, string> = {
+        admin: '/admin',
+        receptionist: '/admin',
+        doctor: '/doctor',
+        pharmacist: '/pharmacy',
+        patient: '/'
+      }
+      navigate(redirectMap[user.role] || '/')
+    }
+  }, [isAuthenticated, user, navigate])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    clearError()
+    
+    if (!email || !password) {
+      return
+    }
+
+    await login({ email, password })
+  }
+
+  const getRoleRedirect = (role: string) => {
+    const redirectMap: Record<string, string> = {
+      admin: '/admin',
+      receptionist: '/admin',
+      doctor: '/doctor',
+      pharmacist: '/pharmacy',
+      patient: '/'
+    }
+    return redirectMap[role] || '/'
+  }
+
+  // Redirect after successful login
+  useEffect(() => {
+    if (isAuthenticated && user && !isLoading) {
+      navigate(getRoleRedirect(user.role))
+    }
+  }, [isAuthenticated, user, isLoading, navigate])
+
   return (
-    <div className="mx-auto max-w-md px-4 sm:px-6 lg:px-8 py-12">
-      <h1 className="text-2xl font-semibold">Sign in</h1>
-      <div className="mt-6 space-y-3">
-        <input className="border rounded-md px-3 py-2 w-full" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} />
-        <input type="password" className="border rounded-md px-3 py-2 w-full" placeholder="Password" value={password} onChange={(e)=>setPassword(e.target.value)} />
-        <select className="border rounded-md px-3 py-2 w-full" value={role} onChange={(e)=>setRole(e.target.value as any)}>
-          <option value="admin">Admin</option>
-          <option value="receptionist">Receptionist</option>
-          <option value="doctor">Doctor</option>
-          <option value="pharmacist">Pharmacist</option>
-          <option value="patient">Patient</option>
-        </select>
-        <button onClick={()=> { login({ email, role }); const map: Record<string,string> = { admin:'/admin', receptionist:'/admin', doctor:'/doctor', pharmacist:'/pharmacy', patient:'/' }; navigate(map[role] || '/') }} className="w-full inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700">Continue</button>
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="flex justify-center">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl flex items-center justify-center">
+            <span className="text-white font-bold text-xl">M</span>
+          </div>
+        </div>
+        <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+          Sign in to your account
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Access the clinic management system
+        </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-red-800">
+                      Login Error
+                    </h3>
+                    <div className="mt-2 text-sm text-red-700">
+                      {error}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Email address
+              </label>
+              <div className="mt-1">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Enter your email"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5 text-gray-400" />
+                  ) : (
+                    <Eye className="h-5 w-5 text-gray-400" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading || !email || !password}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signing in...
+                  </div>
+                ) : (
+                  'Sign in'
+                )}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Demo Credentials</span>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-3">
+              <div className="text-xs text-gray-500 space-y-1">
+                <div><strong>Admin:</strong> admin@clinic.com / admin123</div>
+                <div><strong>Doctor:</strong> dr.smith@clinic.com / doctor123</div>
+                <div><strong>Receptionist:</strong> reception@clinic.com / reception123</div>
+                <div><strong>Pharmacist:</strong> pharmacist@clinic.com / pharmacist123</div>
+                <div><strong>Patient:</strong> rahul@example.com / patient123</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

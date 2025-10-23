@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   BarChart, 
   Bar, 
@@ -26,65 +26,98 @@ import {
   Filter,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react'
+import { analyticsApi, type Analytics } from '../../services/api'
 
-const appointmentData = [
-  { name: 'Mon', appointments: 24, completed: 22, cancelled: 2 },
-  { name: 'Tue', appointments: 31, completed: 28, cancelled: 3 },
-  { name: 'Wed', appointments: 28, completed: 26, cancelled: 2 },
-  { name: 'Thu', appointments: 35, completed: 32, cancelled: 3 },
-  { name: 'Fri', appointments: 42, completed: 38, cancelled: 4 },
-  { name: 'Sat', appointments: 18, completed: 16, cancelled: 2 },
-  { name: 'Sun', appointments: 12, completed: 10, cancelled: 2 },
-]
-
-const monthlyRevenue = [
-  { month: 'Jan', revenue: 45000, patients: 320 },
-  { month: 'Feb', revenue: 52000, patients: 380 },
-  { month: 'Mar', revenue: 48000, patients: 350 },
-  { month: 'Apr', revenue: 61000, patients: 420 },
-  { month: 'May', revenue: 55000, patients: 390 },
-  { month: 'Jun', revenue: 67000, patients: 450 },
-]
-
-const doctorPerformance = [
-  { name: 'Dr. Sarah Sharma', patients: 45, rating: 4.9, revenue: 12500 },
-  { name: 'Dr. Michael Rao', patients: 38, rating: 4.8, revenue: 10800 },
-  { name: 'Dr. Emily Chen', patients: 42, rating: 4.9, revenue: 11200 },
-  { name: 'Dr. David Kumar', patients: 35, rating: 4.7, revenue: 9800 },
-]
-
-const prescriptionData = [
-  { name: 'General Medicine', value: 45, color: '#3b82f6' },
-  { name: 'Cardiology', value: 25, color: '#ef4444' },
-  { name: 'Pediatrics', value: 20, color: '#10b981' },
-  { name: 'Emergency', value: 10, color: '#f59e0b' },
-]
-
-const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b']
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
 
 export function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState('week')
-  const [selectedMetric, setSelectedMetric] = useState('appointments')
+  const [analytics, setAnalytics] = useState<Analytics | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [timeRange, setTimeRange] = useState('7d')
 
-  const stats = {
-    totalAppointments: 190,
-    completedAppointments: 172,
-    cancelledAppointments: 18,
-    totalRevenue: 328000,
-    averageRating: 4.8,
-    totalPatients: 2310,
-    prescriptionsFulfilled: 156,
-    newPatients: 45
+  useEffect(() => {
+    loadAnalytics()
+  }, [timeRange])
+
+  const loadAnalytics = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      const response = await analyticsApi.getDashboardAnalytics()
+      
+      if (response.success) {
+        setAnalytics(response.data)
+      } else {
+        setError('Failed to load analytics data')
+      }
+    } catch (err) {
+      setError('Failed to load analytics data')
+      console.error('Error loading analytics:', err)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const getPercentageChange = (current: number, previous: number) => {
-    return ((current - previous) / previous * 100).toFixed(1)
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('en-US').format(num)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Loading analytics...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="flex">
+          <AlertCircle className="h-5 w-5 text-red-400" />
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800">Error</h3>
+            <div className="mt-2 text-sm text-red-700">{error}</div>
+            <button 
+              onClick={loadAnalytics}
+              className="mt-2 text-sm text-red-600 hover:text-red-500 underline"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!analytics) {
+    return (
+      <div className="text-center py-8">
+        <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No analytics data available</h3>
+        <p className="text-gray-600">Analytics data will appear here once you have some activity.</p>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
@@ -93,18 +126,18 @@ export function AnalyticsPage() {
         </div>
         <div className="flex gap-3">
           <select 
-            value={timeRange}
+            value={timeRange} 
             onChange={(e) => setTimeRange(e.target.value)}
             className="form-input w-auto"
           >
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="quarter">This Quarter</option>
-            <option value="year">This Year</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="1y">Last year</option>
           </select>
           <button className="btn-secondary inline-flex items-center">
             <Download className="w-4 h-4 mr-2" />
-            Export Report
+            Export
           </button>
         </div>
       </div>
@@ -114,15 +147,15 @@ export function AnalyticsPage() {
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Appointments</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalAppointments}</p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +12.5% from last week
-              </p>
+              <p className="text-sm font-medium text-gray-600">Total Patients</p>
+              <p className="text-3xl font-bold text-gray-900">{formatNumber(analytics.totalPatients)}</p>
+              <div className="flex items-center mt-2">
+                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                <span className="text-sm text-green-600">+12% from last month</span>
+              </div>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-6 h-6 text-blue-600" />
+              <Users className="w-6 h-6 text-blue-600" />
             </div>
           </div>
         </div>
@@ -130,15 +163,15 @@ export function AnalyticsPage() {
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Completed</p>
-              <p className="text-2xl font-bold text-green-600">{stats.completedAppointments}</p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +8.2% from last week
-              </p>
+              <p className="text-sm font-medium text-gray-600">Total Appointments</p>
+              <p className="text-3xl font-bold text-gray-900">{formatNumber(analytics.totalAppointments)}</p>
+              <div className="flex items-center mt-2">
+                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                <span className="text-sm text-green-600">+8% from last month</span>
+              </div>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+              <Calendar className="w-6 h-6 text-green-600" />
             </div>
           </div>
         </div>
@@ -146,15 +179,15 @@ export function AnalyticsPage() {
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-              <p className="text-2xl font-bold text-gray-900">${stats.totalRevenue.toLocaleString()}</p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +15.3% from last month
-              </p>
+              <p className="text-sm font-medium text-gray-600">Prescriptions</p>
+              <p className="text-3xl font-bold text-gray-900">{formatNumber(analytics.totalPrescriptions)}</p>
+              <div className="flex items-center mt-2">
+                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                <span className="text-sm text-green-600">+15% from last month</span>
+              </div>
             </div>
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
+              <Pill className="w-6 h-6 text-purple-600" />
             </div>
           </div>
         </div>
@@ -162,196 +195,186 @@ export function AnalyticsPage() {
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Patient Satisfaction</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.averageRating}/5.0</p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-3 h-3 mr-1" />
-                +0.2 from last month
-              </p>
+              <p className="text-sm font-medium text-gray-600">Revenue</p>
+              <p className="text-3xl font-bold text-gray-900">{formatCurrency(analytics.revenue)}</p>
+              <div className="flex items-center mt-2">
+                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
+                <span className="text-sm text-green-600">+22% from last month</span>
+              </div>
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-yellow-600" />
+              <Stethoscope className="w-6 h-6 text-yellow-600" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Appointments Trend - Full Width */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">Appointments Trend</h2>
-          <div className="flex gap-2">
-            <button 
-              className={`px-3 py-1 rounded-md text-sm ${selectedMetric === 'appointments' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-              onClick={() => setSelectedMetric('appointments')}
-            >
-              Appointments
-            </button>
-            <button 
-              className={`px-3 py-1 rounded-md text-sm ${selectedMetric === 'completed' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
-              onClick={() => setSelectedMetric('completed')}
-            >
-              Completed
-            </button>
-          </div>
-        </div>
-        <div className="h-96">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={appointmentData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Area 
-                type="monotone" 
-                dataKey={selectedMetric} 
-                stroke="#3b82f6" 
-                fill="#3b82f6" 
-                fillOpacity={0.3}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Revenue vs Patients - Full Width */}
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">Revenue vs Patients Correlation</h2>
-        <div className="h-96">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={monthlyRevenue}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <Tooltip />
-              <Line yAxisId="left" type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} name="Revenue ($)" />
-              <Line yAxisId="right" type="monotone" dataKey="patients" stroke="#10b981" strokeWidth={3} name="Patients" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Doctor Performance - Full Width */}
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">Doctor Performance Comparison</h2>
-        <div className="h-96">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={doctorPerformance} layout="horizontal">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={150} />
-              <Tooltip />
-              <Bar dataKey="patients" fill="#3b82f6" name="Patients Treated" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Charts Row - Smaller Charts */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Prescription Distribution */}
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Appointments by Day */}
         <div className="card p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Prescription Distribution</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Appointments by Day</h3>
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                <span className="text-sm text-gray-600">Appointments</span>
+              </div>
+            </div>
+          </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={prescriptionData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {prescriptionData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
+              <BarChart data={analytics.charts.appointmentsByDay}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
                 <Tooltip />
-              </PieChart>
+                <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Revenue by Month */}
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Revenue Trend</h3>
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                <span className="text-sm text-gray-600">Revenue</span>
+              </div>
+            </div>
+          </div>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={analytics.charts.revenueByMonth}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => [formatCurrency(Number(value)), 'Revenue']} />
+                <Line 
+                  type="monotone" 
+                  dataKey="revenue" 
+                  stroke="#10B981" 
+                  strokeWidth={3}
+                  dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Additional Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Appointment Status Distribution */}
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Appointment Status</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
+                <span className="text-sm text-gray-600">Scheduled</span>
+              </div>
+              <span className="text-sm font-medium text-gray-900">45%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
+                <span className="text-sm text-gray-600">Confirmed</span>
+              </div>
+              <span className="text-sm font-medium text-gray-900">35%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                <span className="text-sm text-gray-600">Completed</span>
+              </div>
+              <span className="text-sm font-medium text-gray-900">18%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                <span className="text-sm text-gray-600">Cancelled</span>
+              </div>
+              <span className="text-sm font-medium text-gray-900">2%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Top Performing Doctors */}
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Doctors</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Dr. Sarah Sharma</p>
+                <p className="text-xs text-gray-600">General Medicine</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">156</p>
+                <p className="text-xs text-gray-600">appointments</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Dr. Michael Rao</p>
+                <p className="text-xs text-gray-600">Cardiology</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">142</p>
+                <p className="text-xs text-gray-600">appointments</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Dr. Emily Chen</p>
+                <p className="text-xs text-gray-600">Pediatrics</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">128</p>
+                <p className="text-xs text-gray-600">appointments</p>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Quick Stats */}
         <div className="card p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Quick Stats</h2>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h3>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Users className="w-5 h-5 text-blue-600" />
-                <span className="text-sm font-medium text-gray-900">Total Patients</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Clock className="w-4 h-4 text-blue-500 mr-2" />
+                <span className="text-sm text-gray-600">Avg. Wait Time</span>
               </div>
-              <span className="text-lg font-bold text-blue-600">{stats.totalPatients}</span>
+              <span className="text-sm font-medium text-gray-900">12 min</span>
             </div>
-            
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Pill className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-medium text-gray-900">Prescriptions Fulfilled</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
+                <span className="text-sm text-gray-600">Success Rate</span>
               </div>
-              <span className="text-lg font-bold text-green-600">{stats.prescriptionsFulfilled}</span>
+              <span className="text-sm font-medium text-gray-900">98.5%</span>
             </div>
-            
-            <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Users className="w-5 h-5 text-yellow-600" />
-                <span className="text-sm font-medium text-gray-900">New Patients</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Users className="w-4 h-4 text-purple-500 mr-2" />
+                <span className="text-sm text-gray-600">New Patients</span>
               </div>
-              <span className="text-lg font-bold text-yellow-600">{stats.newPatients}</span>
+              <span className="text-sm font-medium text-gray-900">23</span>
             </div>
-            
-            <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-                <span className="text-sm font-medium text-gray-900">Cancelled</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Pill className="w-4 h-4 text-yellow-500 mr-2" />
+                <span className="text-sm text-gray-600">Prescriptions</span>
               </div>
-              <span className="text-lg font-bold text-red-600">{stats.cancelledAppointments}</span>
+              <span className="text-sm font-medium text-gray-900">89</span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Performance Insights */}
-      <div className="card p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-6">Performance Insights</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="p-4 bg-green-50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <span className="font-medium text-green-900">High Completion Rate</span>
-            </div>
-            <p className="text-sm text-green-700">
-              {((stats.completedAppointments / stats.totalAppointments) * 100).toFixed(1)}% of appointments completed successfully
-            </p>
-          </div>
-          
-          <div className="p-4 bg-blue-50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              <span className="font-medium text-blue-900">Revenue Growth</span>
-            </div>
-            <p className="text-sm text-blue-700">
-              Revenue increased by 15.3% compared to last month
-            </p>
-          </div>
-          
-          <div className="p-4 bg-yellow-50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="w-5 h-5 text-yellow-600" />
-              <span className="font-medium text-yellow-900">Patient Satisfaction</span>
-            </div>
-            <p className="text-sm text-yellow-700">
-              Average rating of {stats.averageRating}/5.0 with positive trend
-            </p>
           </div>
         </div>
       </div>
     </div>
   )
 }
-
-

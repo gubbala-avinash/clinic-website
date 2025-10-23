@@ -1,4 +1,4 @@
-import { Outlet, NavLink, Link } from 'react-router-dom'
+import { Outlet, NavLink } from 'react-router-dom'
 import { 
   Menu, 
   X, 
@@ -12,15 +12,16 @@ import {
   Settings, 
   LogOut,
   User,
-  ChevronDown
+  ChevronDown,
+  Server
 } from 'lucide-react'
-import { useAuthStore } from '../store/auth'
+import { useAuth } from '../hooks/useApi'
 import { useState } from 'react'
 
 export function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const { role, email, logout } = useAuthStore()
+  const { user, logout } = useAuth()
 
   const navigation = [
     { name: 'Dashboard', href: '/admin', icon: Home, roles: ['admin', 'receptionist'] },
@@ -30,9 +31,10 @@ export function DashboardLayout() {
     { name: 'Pharmacy', href: '/pharmacy', icon: Pill, roles: ['pharmacist'] },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['admin'] },
     { name: 'Audit Logs', href: '/audit', icon: FileText, roles: ['admin'] },
+    { name: 'Server Status', href: '/status', icon: Server, roles: ['admin'] },
   ]
 
-  const filteredNav = navigation.filter(item => item.roles.includes(role || ''))
+  const filteredNav = navigation.filter(item => item.roles.includes(user?.role || ''))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -109,8 +111,8 @@ export function DashboardLayout() {
             <div className="flex items-center gap-3 px-3 py-2 text-sm text-gray-600">
               <User className="w-5 h-5" />
               <div className="flex-1">
-                <div className="font-medium">{email}</div>
-                <div className="text-xs text-gray-500 capitalize">{role}</div>
+                <div className="font-medium">{user?.email}</div>
+                <div className="text-xs text-gray-500 capitalize">{user?.role}</div>
               </div>
             </div>
           </div>
@@ -129,12 +131,12 @@ export function DashboardLayout() {
               >
                 <Menu className="w-5 h-5" />
               </button>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900">
-                  {role === 'admin' || role === 'receptionist' ? 'Admin Dashboard' :
-                   role === 'doctor' ? 'Doctor Panel' :
-                   role === 'pharmacist' ? 'Pharmacy Dashboard' : 'Dashboard'}
-                </h1>
+                <div>
+                  <h1 className="text-lg font-semibold text-gray-900">
+                    {user?.role === 'admin' || user?.role === 'receptionist' ? 'Admin Dashboard' :
+                     user?.role === 'doctor' ? 'Doctor Panel' :
+                     user?.role === 'pharmacist' ? 'Pharmacy Dashboard' : 'Dashboard'}
+                  </h1>
                 <p className="text-sm text-gray-500">
                   {new Date().toLocaleDateString('en-US', { 
                     weekday: 'long', 
@@ -165,10 +167,10 @@ export function DashboardLayout() {
                 
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                    <div className="px-4 py-2 border-b border-gray-100">
-                      <div className="text-sm font-medium text-gray-900">{email}</div>
-                      <div className="text-xs text-gray-500 capitalize">{role}</div>
-                    </div>
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <div className="text-sm font-medium text-gray-900">{user?.email}</div>
+                        <div className="text-xs text-gray-500 capitalize">{user?.role}</div>
+                      </div>
                     <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
                       <Settings className="w-4 h-4" />
                       Settings
