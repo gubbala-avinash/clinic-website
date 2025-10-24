@@ -15,13 +15,15 @@ import {
   Loader2
 } from 'lucide-react'
 import { appointmentsApi, doctorsApi, adminApi, publicBookingApi, type Appointment, type Doctor } from '../../services/api'
+import { useToast, ToastContainer } from '../../components/ui/Toast'
 
 export function AdminDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const { toasts, success, error, removeToast } = useToast()
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [showCreateBookingModal, setShowCreateBookingModal] = useState(false)
@@ -50,16 +52,16 @@ export function AdminDashboard() {
   const loadAppointments = async () => {
     try {
       setIsLoading(true)
-      setError(null)
+      setApiError(null)
       const response = await appointmentsApi.getAppointments()
       
       if (response.success) {
         setAppointments(response.data)
       } else {
-        setError('Failed to load appointments')
+        error('Failed to load appointments', 'Please try again later')
       }
     } catch (err) {
-      setError('Failed to load appointments')
+      error('Failed to load appointments', 'Please check your connection')
       console.error('Error loading appointments:', err)
     } finally {
       setIsLoading(false)
@@ -102,11 +104,12 @@ export function AdminDashboard() {
           setAppointments(prev => prev.map(apt => 
             apt.id === appointment.id ? { ...apt, status: 'cancelled' } : apt
           ))
+          success('Appointment Cancelled', `${appointment.patientName}'s appointment has been cancelled`)
         } else {
-          setError('Failed to cancel appointment')
+          error('Failed to cancel appointment', 'Please try again')
         }
       } catch (err) {
-        setError('Failed to cancel appointment')
+        error('Failed to cancel appointment', 'Please check your connection')
         console.error('Error cancelling appointment:', err)
       }
     }
@@ -130,11 +133,12 @@ export function AdminDashboard() {
         setShowRescheduleModal(false)
         setSelectedAppointment(null)
         setRescheduleData({ date: '', time: '' })
+        success('Appointment Rescheduled', `${selectedAppointment.patientName}'s appointment has been rescheduled`)
       } else {
-        setError('Failed to reschedule appointment')
+        error('Failed to reschedule appointment', 'Please try again')
       }
     } catch (err) {
-      setError('Failed to reschedule appointment')
+      error('Failed to reschedule appointment', 'Please check your connection')
       console.error('Error rescheduling appointment:', err)
     }
   }
@@ -174,12 +178,12 @@ export function AdminDashboard() {
           reason: ''
         })
         setShowCreateBookingModal(false)
-        setError(null)
+        success('Appointment Created', `New appointment created for ${appointmentData.patientName}`)
       } else {
-        setError('Failed to create appointment')
+        error('Failed to create appointment', 'Please try again')
       }
     } catch (err) {
-      setError('Failed to create appointment')
+      error('Failed to create appointment', 'Please check your connection')
       console.error('Error creating appointment:', err)
     }
   }
@@ -252,24 +256,6 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <AlertCircle className="h-5 w-5 text-red-400" />
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">{error}</div>
-              <button 
-                onClick={loadAppointments}
-                className="mt-2 text-sm text-red-600 hover:text-red-500 underline"
-              >
-                Try again
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -660,6 +646,7 @@ export function AdminDashboard() {
         </div>
       )}
 
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }

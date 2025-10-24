@@ -866,6 +866,113 @@ app.get('/api/analytics/dashboard', async (req, res) => {
       }
     ]);
     
+    // Get appointment status distribution
+    const appointmentStatusData = await Appointment.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          status: '$_id',
+          count: 1
+        }
+      }
+    ]);
+
+    // Get doctor performance data
+    const doctorPerformance = await Appointment.aggregate([
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'doctorId',
+          foreignField: '_id',
+          as: 'doctor'
+        }
+      },
+      {
+        $unwind: '$doctor'
+      },
+      {
+        $group: {
+          _id: '$doctorId',
+          name: { $first: { $concat: ['Dr. ', '$doctor.firstName', ' ', '$doctor.lastName'] } },
+          appointments: { $sum: 1 },
+          revenue: { $sum: { $ifNull: ['$consultationFee', 500] } },
+          specialty: { $first: '$doctor.specialization' }
+        }
+      },
+      {
+        $sort: { appointments: -1 }
+      },
+      {
+        $limit: 10
+      }
+    ]);
+
+    // Get patient age distribution (mock data for now since we don't have age field)
+    const patientAgeGroups = [
+      { ageGroup: '0-18', count: Math.floor(totalPatients * 0.18) },
+      { ageGroup: '19-35', count: Math.floor(totalPatients * 0.34) },
+      { ageGroup: '36-50', count: Math.floor(totalPatients * 0.28) },
+      { ageGroup: '51-65', count: Math.floor(totalPatients * 0.14) },
+      { ageGroup: '65+', count: Math.floor(totalPatients * 0.06) }
+    ];
+
+    // Get monthly trends (patients and appointments)
+    const monthlyTrends = await Appointment.aggregate([
+      {
+        $match: {
+          scheduledAt: { $gte: sixMonthsAgo }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: '$scheduledAt' },
+            month: { $month: '$scheduledAt' }
+          },
+          appointments: { $sum: 1 },
+          uniquePatients: { $addToSet: '$patientId' }
+        }
+      },
+      {
+        $project: {
+          month: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$_id.month', 1] }, then: 'Jan' },
+                { case: { $eq: ['$_id.month', 2] }, then: 'Feb' },
+                { case: { $eq: ['$_id.month', 3] }, then: 'Mar' },
+                { case: { $eq: ['$_id.month', 4] }, then: 'Apr' },
+                { case: { $eq: ['$_id.month', 5] }, then: 'May' },
+                { case: { $eq: ['$_id.month', 6] }, then: 'Jun' },
+                { case: { $eq: ['$_id.month', 7] }, then: 'Jul' },
+                { case: { $eq: ['$_id.month', 8] }, then: 'Aug' },
+                { case: { $eq: ['$_id.month', 9] }, then: 'Sep' },
+                { case: { $eq: ['$_id.month', 10] }, then: 'Oct' },
+                { case: { $eq: ['$_id.month', 11] }, then: 'Nov' },
+                { case: { $eq: ['$_id.month', 12] }, then: 'Dec' }
+              ],
+              default: 'Unknown'
+            }
+          },
+          appointments: 1,
+          patients: { $size: '$uniquePatients' }
+        }
+      }
+    ]);
+
+    // Calculate appointment status percentages
+    const totalAppointmentsForStatus = appointmentStatusData.reduce((sum, item) => sum + item.count, 0);
+    const appointmentStatusWithPercentages = appointmentStatusData.map(item => ({
+      name: item.status.charAt(0).toUpperCase() + item.status.slice(1),
+      value: totalAppointmentsForStatus > 0 ? Math.round((item.count / totalAppointmentsForStatus) * 100) : 0,
+      count: item.count
+    }));
+
     const analytics = {
       totalPatients,
       totalAppointments,
@@ -888,7 +995,11 @@ app.get('/api/analytics/dashboard', async (req, res) => {
           { month: 'Apr', revenue: 0 },
           { month: 'May', revenue: 0 },
           { month: 'Jun', revenue: 0 }
-        ]
+        ],
+        appointmentStatusData: appointmentStatusWithPercentages,
+        doctorPerformance: doctorPerformance,
+        patientAgeGroups: patientAgeGroups,
+        monthlyTrends: monthlyTrends
       }
     };
     
