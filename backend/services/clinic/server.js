@@ -81,12 +81,25 @@ app.get('/api/appointments', async (req, res) => {
 // PUBLIC ROUTES (No Authentication Required)
 // ===========================================
 
+// Health check for clinic service
+app.get('/api/public/health', (req, res) => {
+  console.log('Clinic Service: Health check requested');
+  res.json({ 
+    success: true, 
+    message: 'Clinic service is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Public appointment booking (for frontend booking page)
 app.post('/api/public/appointments', async (req, res) => {
   try {
-    console.log('Clinic Service: Appointment creation request received');
+    console.log('=== CLINIC SERVICE: Public appointment request received ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
     console.log('Request body:', req.body);
     console.log('Request headers:', req.headers);
+    console.log('========================================================');
     
     const { patientName, doctorName, date, time, reason, phone, email } = req.body;
     

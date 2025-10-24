@@ -322,8 +322,16 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 const clinicProxy = createProxyMiddleware({
   target: SERVICES.clinic.url,
   changeOrigin: true,
+  onProxyReq: (proxyReq, req, res) => {
+    console.log('Gateway: Forwarding request to clinic service:', req.method, req.url);
+    console.log('Gateway: Target URL:', SERVICES.clinic.url);
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log('Gateway: Received response from clinic service:', proxyRes.statusCode);
+  },
   onError: (err, req, res) => {
-    console.error('Clinic service error:', err);
+    console.error('Gateway: Clinic service error:', err);
+    console.error('Gateway: Request details:', req.method, req.url);
     res.status(503).json({
       error: 'Clinic service unavailable',
       code: 'SERVICE_UNAVAILABLE'
@@ -344,16 +352,180 @@ const filesProxy = createProxyMiddleware({
   }
 });
 
-// Public routes (no authentication required)
-app.use('/api/public/appointments', (req, res, next) => {
-  console.log('Gateway: Public appointment request received:', req.method, req.url, req.body);
-  next();
-}, clinicProxy);
+// Public appointment booking (handled directly in gateway)
+app.post('/api/public/appointments', async (req, res) => {
+  try {
+    console.log('Gateway: Processing public appointment booking directly');
+    console.log('Request data:', req.body);
+    
+    const { patientName, doctorName, date, time, reason, phone, email } = req.body;
+    
+    // Validation
+    if (!patientName || !doctorName || !date || !time) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        code: 'MISSING_FIELDS'
+      });
+    }
+    
+    // Import models (we need to import them in gateway)
+    console.log('Importing models...');
+    const { User } = await import('../shared/models/User.js');
+    const { Appointment: AppointmentModel } = await import('../shared/models/Appointment.js');
+    console.log('Models imported successfully');
+    
+    // Find or create patient
+    const nameParts = patientName.trim().split(' ');
+    const firstName = nameParts[0] || 'Patient';
+    const lastName = nameParts.slice(1).join(' ') || 'User'; // Join remaining parts as lastName
+    
+    let patient = await User.findOne({ 
+      $or: [
+        { email: email },
+        { firstName: firstName, lastName: lastName }
+      ]
+    });
+    
+    if (!patient) {
+      console.log('Creating new patient...');
+      // Hash password for patient
+      const bcrypt = await import('bcryptjs');
+      const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+      const hashedPassword = await bcrypt.default.hash('patient123', saltRounds);
+      
+      // Create new patient
+      patient = new User({
+        firstName: firstName,
+        lastName: lastName,
+        email: email || `${patientName.toLowerCase().replace(/\s+/g, '.')}@example.com`,
+        phone: phone || '+91-0000000000',
+        role: 'patient',
+        password: hashedPassword,
+        isActive: true
+      });
+      await patient.save();
+      console.log('Patient created successfully');
+    } else {
+      console.log('Found existing patient');
+    }
+    
+    // Find doctor by name (improved logic)
+    const doctorNameParts = doctorName.replace('Dr. ', '').split(' ');
+    let doctor = await User.findOne({ 
+      role: 'doctor',
+      $or: [
+        { firstName: doctorNameParts[0], lastName: doctorNameParts[1] },
+        { firstName: doctorNameParts[0] },
+        { lastName: doctorNameParts[1] }
+      ]
+    });
+    
+    if (!doctor) {
+      console.log('Doctor not found, using first available doctor');
+      // If doctor not found, use the first available doctor
+      const firstDoctor = await User.findOne({ role: 'doctor', isActive: true });
+      if (!firstDoctor) {
+        return res.status(400).json({
+          error: 'No doctors available',
+          code: 'NO_DOCTORS_AVAILABLE'
+        });
+      }
+      doctor = firstDoctor;
+    }
+    
+    console.log('Using doctor:', doctor.firstName, doctor.lastName);
+    
+    // Create appointment
+    const appointment = new AppointmentModel({
+      appointmentId: `APT${Date.now()}`,
+      patientId: patient._id,
+      doctorId: doctor._id,
+      scheduledAt: new Date(`${date}T${time}:00`),
+      status: 'scheduled',
+      reason: reason || 'General consultation',
+      createdBy: patient._id // Use patient ID as creator for public bookings
+    });
+    
+    console.log('Saving appointment to database...');
+    await appointment.save();
+    console.log('Appointment saved successfully');
+    
+    // Populate the response
+    await appointment.populate('patientId', 'firstName lastName email phone');
+    await appointment.populate('doctorId', 'firstName lastName email');
+    
+    const formattedAppointment = {
+      id: appointment._id,
+      patientName: `${appointment.patientId.firstName} ${appointment.patientId.lastName}`,
+      doctorName: `Dr. ${appointment.doctorId.firstName} ${appointment.doctorId.lastName}`,
+      date: appointment.scheduledAt.toISOString().split('T')[0],
+      time: appointment.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+      status: appointment.status,
+      reason: appointment.reason,
+      phone: appointment.patientId.phone,
+      email: appointment.patientId.email
+    };
+    
+    res.status(201).json({
+      success: true,
+      message: 'Appointment created successfully',
+      data: formattedAppointment
+    });
+  } catch (error) {
+    console.error('Gateway: Create appointment error:', error);
+    res.status(500).json({
+      error: 'Failed to create appointment',
+      code: 'CREATE_ERROR'
+    });
+  }
+});
 
-app.use('/api/public/doctors', (req, res, next) => {
-  console.log('Gateway: Public doctors request received:', req.method, req.url);
-  next();
-}, clinicProxy);
+// Public doctors list (handled directly in gateway)
+app.get('/api/public/doctors', async (req, res) => {
+  try {
+    console.log('Gateway: Processing public doctors request directly');
+    
+    // Import User model
+    const { User } = await import('../shared/models/User.js');
+    
+    const doctors = await User.find({ 
+      role: 'doctor', 
+      isActive: true 
+    }).select('firstName lastName email doctorInfo');
+
+    const formattedDoctors = doctors.map(doctor => ({
+      id: doctor._id,
+      name: `Dr. ${doctor.firstName} ${doctor.lastName}`,
+      email: doctor.email,
+      specialty: doctor.doctorInfo?.specialization?.[0] || 'General Medicine',
+      experience: doctor.doctorInfo?.experience || 0,
+      qualification: doctor.doctorInfo?.qualification || '',
+      consultationFee: doctor.doctorInfo?.consultationFee || 500,
+      rating: 4.8 // Default rating
+    }));
+    
+    res.json({
+      success: true,
+      data: formattedDoctors
+    });
+  } catch (error) {
+    console.error('Gateway: Get public doctors error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch doctors',
+      code: 'FETCH_ERROR'
+    });
+  }
+});
+
+// Public health check (handled directly in gateway)
+app.get('/api/public/health', (req, res) => {
+  console.log('Gateway: Health check requested');
+  res.json({ 
+    success: true, 
+    message: 'Gateway service is running',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Protected routes (authentication required)
 app.use('/api/appointments', authenticateToken, clinicProxy);

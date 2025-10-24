@@ -58,16 +58,62 @@ export function BookingPage() {
     setIsSubmitting(true)
     setError(null)
     
+    // Frontend validation
+    if (!form.name.trim()) {
+      setError('Please enter your full name')
+      setIsSubmitting(false)
+      return
+    }
+    
+    if (!form.phone.trim()) {
+      setError('Please enter your phone number')
+      setIsSubmitting(false)
+      return
+    }
+    
+    if (!form.email.trim()) {
+      setError('Please enter your email address')
+      setIsSubmitting(false)
+      return
+    }
+    
+    if (!form.date) {
+      setError('Please select a date')
+      setIsSubmitting(false)
+      return
+    }
+    
+    if (!form.time) {
+      setError('Please select a time')
+      setIsSubmitting(false)
+      return
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(form.email)) {
+      setError('Please enter a valid email address')
+      setIsSubmitting(false)
+      return
+    }
+    
+    // Phone validation (basic)
+    if (form.phone.length < 10) {
+      setError('Please enter a valid phone number')
+      setIsSubmitting(false)
+      return
+    }
+    
     try {
       const selectedDoctor = doctors.find(d => d.id === form.doctorId)
       const appointmentData = {
-        patientName: form.name,
+        patientName: form.name.trim(),
         doctorName: selectedDoctor?.name || 'General Doctor',
         date: form.date,
         time: form.time,
         reason: form.reason,
-        phone: form.phone,
-        email: form.email
+        phone: form.phone.trim(),
+        email: form.email.trim()
       }
 
       console.log('Submitting appointment data:', appointmentData)
@@ -204,33 +250,42 @@ export function BookingPage() {
                     <div>
                       <label className="form-label">Full Name *</label>
                       <input 
-                        className="form-input" 
-                        placeholder="Enter your full name" 
+                        className={`form-input ${!form.name.trim() && form.name ? 'border-red-300' : ''}`}
+                        placeholder="Enter your full name (e.g., John Doe)" 
                         value={form.name} 
                         onChange={(e)=>update('name', e.target.value)}
                         required
                       />
+                      {!form.name.trim() && form.name && (
+                        <p className="text-red-500 text-sm mt-1">Please enter your full name</p>
+                      )}
                     </div>
                     <div>
                       <label className="form-label">Phone Number *</label>
                       <input 
-                        className="form-input" 
+                        className={`form-input ${form.phone && form.phone.length < 10 ? 'border-red-300' : ''}`}
                         placeholder="+1 (555) 123-4567" 
                         value={form.phone} 
                         onChange={(e)=>update('phone', e.target.value)}
                         required
                       />
+                      {form.phone && form.phone.length < 10 && (
+                        <p className="text-red-500 text-sm mt-1">Please enter a valid phone number</p>
+                      )}
                     </div>
                     <div>
                       <label className="form-label">Email Address *</label>
                       <input 
                         type="email"
-                        className="form-input" 
+                        className={`form-input ${form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? 'border-red-300' : ''}`}
                         placeholder="your.email@example.com" 
                         value={form.email} 
                         onChange={(e)=>update('email', e.target.value)}
                         required
                       />
+                      {form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) && (
+                        <p className="text-red-500 text-sm mt-1">Please enter a valid email address</p>
+                      )}
                     </div>
                     <div>
                       <label className="form-label">Age</label>
