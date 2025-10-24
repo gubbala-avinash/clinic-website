@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { adminApi, type Doctor } from '../../services/api'
+import { useToast, ToastContainer } from '../../components/ui/Toast'
 
 interface User {
   id: string;
@@ -48,6 +49,7 @@ export function UserManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const { toasts, success: showSuccess, error: showError, removeToast } = useToast()
 
   // Form states
   const [doctorForm, setDoctorForm] = useState({
@@ -116,7 +118,7 @@ export function UserManagementPage() {
       })
 
       if (response.success) {
-        setSuccess('Doctor account created successfully!')
+        showSuccess('Doctor Created', `Dr. ${doctorForm.firstName} ${doctorForm.lastName} has been added successfully`)
         setDoctorForm({
           firstName: '',
           lastName: '',
@@ -131,10 +133,10 @@ export function UserManagementPage() {
         setShowCreateDoctorModal(false)
         loadUsers() // Refresh users list
       } else {
-        setError('Failed to create doctor account')
+        showError('Failed to create doctor', 'Please try again')
       }
     } catch (err) {
-      setError('Failed to create doctor account')
+      showError('Failed to create doctor', 'Please check your connection')
       console.error('Error creating doctor:', err)
     } finally {
       setIsSubmitting(false)
@@ -615,6 +617,7 @@ export function UserManagementPage() {
           </div>
         )}
       </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }
