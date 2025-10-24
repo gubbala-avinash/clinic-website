@@ -7,6 +7,7 @@ import { BookingPage } from './pages/BookingPage'
 import { LoginPage } from './pages/auth/LoginPage'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { UserManagementPage } from './pages/admin/UserManagementPage'
+import { DemoPrescriptionPage } from './pages/demo/DemoPrescriptionPage'
 import { PatientsPage } from './pages/admin/PatientsPage'
 import { SettingsPage } from './pages/admin/SettingsPage'
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard'
@@ -62,6 +63,7 @@ export default function App() {
                 </RoleRoute>
               }
             />
+            <Route path="demo/prescription" element={<DemoPrescriptionPage />} />
             <Route
               path="admin/patients"
               element={

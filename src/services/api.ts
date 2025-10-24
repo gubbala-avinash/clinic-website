@@ -297,6 +297,108 @@ export const analyticsApi = {
 };
 
 export const filesApi = {
+  async uploadPrescriptionImage(file: File, prescriptionId: string): Promise<{ success: boolean; data: any }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('prescriptionId', prescriptionId);
+    
+    const response = await fetch(`${API_BASE_URL}/files/upload/prescription-image`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'UPLOAD_ERROR', 'Image upload failed');
+    }
+
+    return response.json();
+  },
+
+  async uploadPrescriptionPDF(file: File, prescriptionId: string): Promise<{ success: boolean; data: any }> {
+    const formData = new FormData();
+    formData.append('pdf', file);
+    formData.append('prescriptionId', prescriptionId);
+    
+    const response = await fetch(`${API_BASE_URL}/files/upload/prescription-pdf`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'UPLOAD_ERROR', 'PDF upload failed');
+    }
+
+    return response.json();
+  },
+
+  async getPrescriptionFiles(prescriptionId: string): Promise<{ success: boolean; data: any }> {
+    const response = await fetch(`${API_BASE_URL}/files/prescription/${prescriptionId}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'GET_ERROR', 'Failed to get prescription files');
+    }
+
+    return response.json();
+  },
+
+  async deletePrescriptionFiles(prescriptionId: string): Promise<{ success: boolean; data: any }> {
+    const response = await fetch(`${API_BASE_URL}/files/prescription/${prescriptionId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'DELETE_ERROR', 'Failed to delete prescription files');
+    }
+
+    return response.json();
+  },
+
+  getFileUrl(filename: string, subfolder: string = ''): string {
+    return `${API_BASE_URL}/uploads/prescriptions/${subfolder}/${filename}`;
+  },
+
+  getOrganizedFileUrl(relativePath: string): string {
+    return `${API_BASE_URL}/uploads/prescriptions/${relativePath}`;
+  },
+
+  async generatePrescriptionPDF(prescriptionData: any): Promise<Blob> {
+    const response = await fetch(`${API_BASE_URL}/prescriptions/generate-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(prescriptionData),
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'PDF_ERROR', 'Failed to generate PDF');
+    }
+
+    return response.blob();
+  },
+
+  async generateAndSavePrescriptionPDF(prescriptionData: any): Promise<{ success: boolean; data: any }> {
+    const response = await fetch(`${API_BASE_URL}/prescriptions/generate-and-save-pdf`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(prescriptionData),
+    });
+
+    if (!response.ok) {
+      throw new ApiError(response.status, 'PDF_ERROR', 'Failed to generate and save PDF');
+    }
+
+    return response.json();
+  },
+
   async uploadFile(file: File): Promise<{ success: boolean; data: any }> {
     const formData = new FormData();
     formData.append('file', file);

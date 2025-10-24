@@ -8,11 +8,33 @@ import { connectDB } from '../shared/database.js';
 import { User } from '../shared/models/User.js';
 import { Appointment } from '../shared/models/Appointment.js';
 import { Prescription } from '../shared/models/Prescription.js';
+import { localFileStorage } from '../shared/localStorage.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import puppeteer from 'puppeteer';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
 
 const app = express();
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow images and PDFs
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images and PDFs are allowed'), false);
+    }
+  }
+});
 const PORT = process.env.CLINIC_PORT || 3001;
 
 // ===========================================
@@ -763,6 +785,671 @@ app.patch('/api/pharmacy/:id/fulfill', async (req, res) => {
     res.status(500).json({
       error: 'Failed to update fulfillment',
       code: 'UPDATE_ERROR'
+    });
+  }
+});
+
+// ===========================================
+// PDF GENERATION SERVICE
+// ===========================================
+
+// Browser pool for better performance
+let browserInstance = null;
+
+const getBrowser = async () => {
+  if (!browserInstance) {
+    try {
+      browserInstance = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process',
+          '--disable-gpu'
+        ]
+      });
+    } catch (error) {
+      console.error('Failed to create browser pool, creating new browser:', error);
+      // Fallback: create a new browser instance
+      return await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ]
+      });
+    }
+  }
+  return browserInstance;
+};
+
+const generatePrescriptionPDF = async (prescriptionData) => {
+  let page = null;
+  try {
+    const browser = await getBrowser();
+    page = await browser.newPage();
+    
+    // Optimize page settings
+    await page.setViewport({ width: 794, height: 1123 }); // A4 size
+    await page.setCacheEnabled(false);
+    
+    // Generate HTML content for the prescription
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Prescription - ${prescriptionData.patientName}</title>
+      <style>
+        body {
+          font-family: 'Arial', sans-serif;
+          margin: 0;
+          padding: 20px;
+          background: white;
+          color: #333;
+        }
+        .header {
+          border-bottom: 3px solid #2563eb;
+          padding-bottom: 15px;
+          margin-bottom: 20px;
+        }
+        .clinic-info {
+          text-align: center;
+          margin-bottom: 20px;
+        }
+        .clinic-name {
+          font-size: 24px;
+          font-weight: bold;
+          color: #2563eb;
+          margin-bottom: 5px;
+        }
+        .clinic-address {
+          font-size: 12px;
+          color: #666;
+          margin-bottom: 5px;
+        }
+        .clinic-phone {
+          font-size: 12px;
+          color: #666;
+        }
+        .prescription-header {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          padding: 15px;
+          background: #f8fafc;
+          border-radius: 8px;
+        }
+        .patient-info, .doctor-info {
+          flex: 1;
+        }
+        .patient-info h3, .doctor-info h3 {
+          margin: 0 0 10px 0;
+          color: #1f2937;
+          font-size: 16px;
+        }
+        .info-row {
+          margin-bottom: 5px;
+          font-size: 14px;
+        }
+        .label {
+          font-weight: bold;
+          color: #374151;
+        }
+        .prescription-date {
+          text-align: right;
+          font-size: 14px;
+          color: #666;
+          margin-bottom: 20px;
+        }
+        .whiteboard-container {
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          margin: 20px 0;
+          min-height: 1200px;
+          background: white;
+          padding: 10px;
+          overflow: hidden;
+        }
+        .whiteboard-image {
+          width: 200%;
+          height: auto;
+          min-height: 1000px;
+          max-height: 1600px;
+          border-radius: 6px;
+          object-fit: contain;
+          background: white;
+          border: 1px solid #e5e7eb;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          transform: scale(2);
+          transform-origin: top left;
+        }
+        .medications-section {
+          margin: 20px 0;
+        }
+        .section-title {
+          font-size: 18px;
+          font-weight: bold;
+          color: #1f2937;
+          margin-bottom: 10px;
+          border-bottom: 2px solid #e5e7eb;
+          padding-bottom: 5px;
+        }
+        .medication-item {
+          background: #f9fafb;
+          padding: 10px;
+          margin: 5px 0;
+          border-radius: 6px;
+          border-left: 4px solid #2563eb;
+        }
+        .medication-name {
+          font-weight: bold;
+          color: #1f2937;
+        }
+        .medication-details {
+          font-size: 14px;
+          color: #6b7280;
+          margin-top: 5px;
+        }
+        .tests-section {
+          margin: 20px 0;
+        }
+        .test-item {
+          background: #f0f9ff;
+          padding: 8px 12px;
+          margin: 5px 0;
+          border-radius: 6px;
+          border-left: 4px solid #0ea5e9;
+          font-size: 14px;
+        }
+        .notes-section {
+          margin: 20px 0;
+          padding: 15px;
+          background: #fef3c7;
+          border-radius: 8px;
+          border-left: 4px solid #f59e0b;
+        }
+        .notes-title {
+          font-weight: bold;
+          color: #92400e;
+          margin-bottom: 8px;
+        }
+        .notes-content {
+          color: #78350f;
+          line-height: 1.5;
+        }
+        .footer {
+          margin-top: 30px;
+          padding-top: 15px;
+          border-top: 2px solid #e5e7eb;
+          text-align: center;
+          font-size: 12px;
+          color: #6b7280;
+        }
+        .signature-section {
+          margin-top: 30px;
+          display: flex;
+          justify-content: space-between;
+        }
+        .signature {
+          text-align: center;
+          width: 200px;
+        }
+        .signature-line {
+          border-bottom: 1px solid #333;
+          margin-bottom: 5px;
+          height: 20px;
+        }
+        .signature-label {
+          font-size: 12px;
+          color: #666;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="clinic-info">
+          <div class="clinic-name">${prescriptionData.clinicName}</div>
+          <div class="clinic-address">${prescriptionData.clinicAddress}</div>
+          <div class="clinic-phone">Phone: ${prescriptionData.clinicPhone}</div>
+        </div>
+      </div>
+
+      <div class="prescription-header">
+        <div class="patient-info">
+          <h3>Patient Information</h3>
+          <div class="info-row"><span class="label">Name:</span> ${prescriptionData.patientName}</div>
+          <div class="info-row"><span class="label">Age:</span> ${prescriptionData.patientAge} years</div>
+          <div class="info-row"><span class="label">Gender:</span> ${prescriptionData.patientGender}</div>
+          <div class="info-row"><span class="label">Phone:</span> ${prescriptionData.patientPhone}</div>
+          <div class="info-row"><span class="label">Email:</span> ${prescriptionData.patientEmail}</div>
+        </div>
+        <div class="doctor-info">
+          <h3>Doctor Information</h3>
+          <div class="info-row"><span class="label">Name:</span> ${prescriptionData.doctorName}</div>
+          <div class="info-row"><span class="label">Qualification:</span> ${prescriptionData.doctorQualification}</div>
+          <div class="info-row"><span class="label">Registration:</span> ${prescriptionData.doctorRegistration}</div>
+        </div>
+      </div>
+
+      <div class="prescription-date">
+        <strong>Prescription Date:</strong> ${prescriptionData.date}
+      </div>
+
+      ${prescriptionData.whiteboardData ? `
+        <div class="whiteboard-container">
+          <div style="text-align: center; margin-bottom: 10px;">
+            <h3 style="color: #1f2937; font-size: 16px; margin: 0;">Prescription Details</h3>
+          </div>
+          <img src="data:image/png;base64,${prescriptionData.whiteboardData}" alt="Prescription Whiteboard" class="whiteboard-image" />
+        </div>
+      ` : ''}
+
+      ${prescriptionData.medications && prescriptionData.medications.length > 0 ? `
+        <div class="medications-section">
+          <div class="section-title">Medications</div>
+          ${prescriptionData.medications.map(med => `
+            <div class="medication-item">
+              <div class="medication-name">${med.name}</div>
+              <div class="medication-details">
+                <strong>Dosage:</strong> ${med.dosage} | 
+                <strong>Frequency:</strong> ${med.frequency} | 
+                <strong>Duration:</strong> ${med.duration}
+                ${med.notes ? `<br><strong>Notes:</strong> ${med.notes}` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      ${prescriptionData.tests && prescriptionData.tests.length > 0 ? `
+        <div class="tests-section">
+          <div class="section-title">Recommended Tests</div>
+          ${prescriptionData.tests.map(test => `
+            <div class="test-item">${test}</div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      ${prescriptionData.notes ? `
+        <div class="notes-section">
+          <div class="notes-title">Doctor's Notes</div>
+          <div class="notes-content">${prescriptionData.notes}</div>
+        </div>
+      ` : ''}
+
+      <div class="signature-section">
+        <div class="signature">
+          ${prescriptionData.doctorSignature ? `
+            <div class="signature-image">
+              <img src="data:image/png;base64,${prescriptionData.doctorSignature}" alt="Doctor's Signature" style="max-width: 200px; max-height: 60px; border-bottom: 1px solid #333;" />
+            </div>
+          ` : `
+            <div class="signature-line"></div>
+          `}
+          <div class="signature-label">Doctor's Signature</div>
+        </div>
+        <div class="signature">
+          <div class="signature-line"></div>
+          <div class="signature-label">Date: ${prescriptionData.currentDate || prescriptionData.date}</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>This is a computer-generated prescription. Please keep this document safe.</p>
+        <p>For any queries, contact: ${prescriptionData.clinicPhone}</p>
+      </div>
+    </body>
+    </html>
+    `;
+
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    // Wait for images to load properly
+    try {
+      await page.waitForSelector('img', { timeout: 5000 });
+    } catch (error) {
+      // If no images, continue anyway
+      console.log('No images found, continuing...');
+    }
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '15px',
+        right: '15px',
+        bottom: '15px',
+        left: '15px'
+      },
+      preferCSSPageSize: true,
+      displayHeaderFooter: false
+    });
+
+    await page.close(); // Close page instead of browser
+    
+    return {
+      success: true,
+      pdfBuffer,
+      size: pdfBuffer.length
+    };
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    
+    // Close page if it exists
+    try {
+      if (page) {
+        await page.close();
+      }
+    } catch (closeError) {
+      console.error('Error closing page:', closeError);
+    }
+    
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// ===========================================
+// FILE UPLOAD ROUTES
+// ===========================================
+
+// Upload prescription image
+app.post('/api/files/upload/prescription-image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No file uploaded',
+        code: 'NO_FILE'
+      });
+    }
+
+    const { prescriptionId } = req.body;
+    if (!prescriptionId) {
+      return res.status(400).json({
+        error: 'Prescription ID is required',
+        code: 'MISSING_PRESCRIPTION_ID'
+      });
+    }
+
+    const result = await localFileStorage.savePrescriptionFile(req.file, prescriptionId, 'images');
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Prescription image uploaded successfully',
+        data: {
+          filename: result.filename,
+          originalName: result.originalName,
+          url: result.url,
+          relativePath: result.relativePath,
+          size: result.size,
+          mimetype: result.mimetype,
+          prescriptionId: result.prescriptionId,
+          fileType: result.fileType,
+          uploadedAt: result.uploadedAt
+        }
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to save prescription image',
+        code: 'SAVE_ERROR'
+      });
+    }
+  } catch (error) {
+    console.error('Upload prescription image error:', error);
+    res.status(500).json({
+      error: 'Failed to upload prescription image',
+      code: 'UPLOAD_ERROR'
+    });
+  }
+});
+
+// Upload prescription PDF
+app.post('/api/files/upload/prescription-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No file uploaded',
+        code: 'NO_FILE'
+      });
+    }
+
+    const { prescriptionId } = req.body;
+    if (!prescriptionId) {
+      return res.status(400).json({
+        error: 'Prescription ID is required',
+        code: 'MISSING_PRESCRIPTION_ID'
+      });
+    }
+
+    const result = await localFileStorage.savePrescriptionFile(req.file, prescriptionId, 'pdfs');
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Prescription PDF uploaded successfully',
+        data: {
+          filename: result.filename,
+          originalName: result.originalName,
+          url: result.url,
+          relativePath: result.relativePath,
+          size: result.size,
+          mimetype: result.mimetype,
+          prescriptionId: result.prescriptionId,
+          fileType: result.fileType,
+          uploadedAt: result.uploadedAt
+        }
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to save prescription PDF',
+        code: 'SAVE_ERROR'
+      });
+    }
+  } catch (error) {
+    console.error('Upload prescription PDF error:', error);
+    res.status(500).json({
+      error: 'Failed to upload prescription PDF',
+      code: 'UPLOAD_ERROR'
+    });
+  }
+});
+
+// Get prescription files
+app.get('/api/files/prescription/:prescriptionId', async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+    
+    const result = await localFileStorage.getPrescriptionFiles(prescriptionId);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Prescription files retrieved successfully',
+        data: {
+          prescriptionId,
+          files: result.files,
+          count: result.count
+        }
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to retrieve prescription files',
+        code: 'RETRIEVE_ERROR'
+      });
+    }
+  } catch (error) {
+    console.error('Get prescription files error:', error);
+    res.status(500).json({
+      error: 'Failed to get prescription files',
+      code: 'GET_ERROR'
+    });
+  }
+});
+
+// Delete prescription files
+app.delete('/api/files/prescription/:prescriptionId', async (req, res) => {
+  try {
+    const { prescriptionId } = req.params;
+    
+    const result = await localFileStorage.deletePrescriptionFiles(prescriptionId);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message,
+        data: {
+          prescriptionId,
+          deletedCount: result.deletedCount
+        }
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to delete prescription files',
+        code: 'DELETE_ERROR'
+      });
+    }
+  } catch (error) {
+    console.error('Delete prescription files error:', error);
+    res.status(500).json({
+      error: 'Failed to delete prescription files',
+      code: 'DELETE_ERROR'
+    });
+  }
+});
+
+// Generate prescription PDF
+app.post('/api/prescriptions/generate-pdf', async (req, res) => {
+  try {
+    const prescriptionData = req.body;
+    
+    // Validate required fields
+    if (!prescriptionData.patientName || !prescriptionData.doctorName) {
+      return res.status(400).json({
+        error: 'Patient name and doctor name are required',
+        code: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Generate PDF
+    const result = await generatePrescriptionPDF(prescriptionData);
+    
+    if (result.success) {
+      // Set response headers for PDF download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="prescription_${prescriptionData.patientName}_${Date.now()}.pdf"`);
+      res.setHeader('Content-Length', result.size);
+      
+      // Send PDF buffer
+      res.send(result.pdfBuffer);
+    } else {
+      res.status(500).json({
+        error: 'Failed to generate PDF',
+        code: 'PDF_GENERATION_ERROR',
+        details: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Generate prescription PDF error:', error);
+    res.status(500).json({
+      error: 'Failed to generate prescription PDF',
+      code: 'PDF_ERROR'
+    });
+  }
+});
+
+// Generate and save prescription PDF
+app.post('/api/prescriptions/generate-and-save-pdf', async (req, res) => {
+  try {
+    const prescriptionData = req.body;
+    
+    // Validate required fields
+    if (!prescriptionData.patientName || !prescriptionData.doctorName || !prescriptionData.prescriptionId) {
+      return res.status(400).json({
+        error: 'Patient name, doctor name, and prescription ID are required',
+        code: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Generate PDF
+    const result = await generatePrescriptionPDF(prescriptionData);
+    
+    if (result.success) {
+      // Create a file object for saving
+      const file = {
+        buffer: result.pdfBuffer,
+        originalname: `prescription_${prescriptionData.prescriptionId}.pdf`,
+        mimetype: 'application/pdf',
+        size: result.size
+      };
+
+      // Save PDF to organized storage
+      const saveResult = await localFileStorage.savePrescriptionFile(file, prescriptionData.prescriptionId, 'pdfs');
+      
+      if (saveResult.success) {
+        res.json({
+          success: true,
+          message: 'Prescription PDF generated and saved successfully',
+          data: {
+            filename: saveResult.filename,
+            url: saveResult.url,
+            relativePath: saveResult.relativePath,
+            size: saveResult.size,
+            prescriptionId: saveResult.prescriptionId,
+            fileType: saveResult.fileType,
+            uploadedAt: saveResult.uploadedAt
+          }
+        });
+      } else {
+        res.status(500).json({
+          error: 'Failed to save PDF',
+          code: 'SAVE_ERROR',
+          details: saveResult.error
+        });
+      }
+    } else {
+      res.status(500).json({
+        error: 'Failed to generate PDF',
+        code: 'PDF_GENERATION_ERROR',
+        details: result.error
+      });
+    }
+  } catch (error) {
+    console.error('Generate and save prescription PDF error:', error);
+    res.status(500).json({
+      error: 'Failed to generate and save prescription PDF',
+      code: 'PDF_ERROR'
+    });
+  }
+});
+
+// Serve uploaded files
+app.get('/uploads/prescriptions/*', (req, res) => {
+  try {
+    const filePath = path.join(__dirname, '../../../uploads/prescriptions', req.params[0]);
+    
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      res.status(404).json({
+        error: 'File not found',
+        code: 'FILE_NOT_FOUND'
+      });
+    }
+  } catch (error) {
+    console.error('Serve file error:', error);
+    res.status(500).json({
+      error: 'Failed to serve file',
+      code: 'SERVE_ERROR'
     });
   }
 });

@@ -39,6 +39,8 @@ import {
 } from 'lucide-react'
 import { RichText } from '../../components/editor/RichText'
 import { Link } from 'react-router-dom'
+import { appointmentsApi, prescriptionsApi, type Appointment, type Prescription } from '../../services/api'
+import { useToast, ToastContainer } from '../../components/ui/Toast'
 
 type Patient = { 
   id: string; 
@@ -149,13 +151,58 @@ const MOCK_PATIENTS: Patient[] = [
 ]
 
 export function DoctorDashboard() {
-  const [patients, setPatients] = useState<Patient[]>(MOCK_PATIENTS)
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [activeTab, setActiveTab] = useState<'patients' | 'prescription'>('patients')
   const [showPatientModal, setShowPatientModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const { toasts, success, error: showError, removeToast } = useToast()
+
+  // Load appointments and convert to patients
+  useEffect(() => {
+    loadAppointments()
+  }, [])
+
+  const loadAppointments = async () => {
+    try {
+      setIsLoading(true)
+      const response = await appointmentsApi.getAppointments()
+      
+      if (response.success) {
+        setAppointments(response.data)
+        // Convert appointments to patient format
+        const patientsData = response.data.map((apt: Appointment) => ({
+          id: apt.id,
+          name: apt.patientName,
+          time: apt.time,
+          reason: apt.reason,
+          age: 30, // Default age since we don't have it in appointments
+          gender: 'Unknown', // Default gender
+          phone: apt.phone || '',
+          email: apt.email || '',
+          medicalHistory: [], // Will be populated from patient data
+          status: apt.status === 'scheduled' ? 'waiting' : 
+                 apt.status === 'confirmed' ? 'in-progress' : 
+                 apt.status === 'completed' ? 'completed' : 'waiting',
+          priority: 'medium' as const,
+          vitalSigns: undefined
+        }))
+        setPatients(patientsData)
+        success('Appointments Loaded', 'Today\'s appointments loaded successfully')
+      } else {
+        showError('Failed to load appointments', 'Please try again later')
+      }
+    } catch (err) {
+      showError('Failed to load appointments', 'Please check your connection')
+      console.error('Error loading appointments:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
   
   // Prescription state
   const [prescription, setPrescription] = useState<Prescription>({
@@ -550,6 +597,7 @@ export function DoctorDashboard() {
           )}
         </div>
       </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }
