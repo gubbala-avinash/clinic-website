@@ -344,7 +344,18 @@ const filesProxy = createProxyMiddleware({
   }
 });
 
-// Route appointments to clinic service
+// Public routes (no authentication required)
+app.use('/api/public/appointments', (req, res, next) => {
+  console.log('Gateway: Public appointment request received:', req.method, req.url, req.body);
+  next();
+}, clinicProxy);
+
+app.use('/api/public/doctors', (req, res, next) => {
+  console.log('Gateway: Public doctors request received:', req.method, req.url);
+  next();
+}, clinicProxy);
+
+// Protected routes (authentication required)
 app.use('/api/appointments', authenticateToken, clinicProxy);
 app.use('/api/prescriptions', authenticateToken, clinicProxy);
 app.use('/api/pharmacy', authenticateToken, clinicProxy);

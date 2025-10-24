@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Calendar, Clock, User, Phone, Mail, Stethoscope, CheckCircle, ArrowRight, Loader2 } from 'lucide-react'
-import { doctorsApi, appointmentsApi, type Doctor } from '../services/api'
+import { publicDoctorsApi, publicBookingApi, type Doctor } from '../services/api'
 
 export function BookingPage() {
   const [form, setForm] = useState({ 
@@ -29,7 +29,7 @@ export function BookingPage() {
     try {
       setIsLoadingDoctors(true)
       setError(null)
-      const response = await doctorsApi.getDoctors()
+      const response = await publicDoctorsApi.getDoctors()
       
       if (response.success) {
         setDoctors(response.data)
@@ -73,7 +73,7 @@ export function BookingPage() {
       console.log('Submitting appointment data:', appointmentData)
       console.log('Selected doctor:', selectedDoctor)
 
-      const response = await appointmentsApi.createAppointment(appointmentData)
+      const response = await publicBookingApi.createAppointment(appointmentData)
       console.log('Appointment API response:', response)
       
       if (response.success) {

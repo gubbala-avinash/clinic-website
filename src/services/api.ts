@@ -95,15 +95,19 @@ class HttpClient {
     this.baseURL = baseURL;
   }
 
-  private async request<T>(
+  private   async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
+    // Get JWT token from localStorage
+    const token = localStorage.getItem('authToken');
+    
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       credentials: 'include', // Include cookies for authentication
@@ -195,6 +199,28 @@ export const appointmentsApi = {
   async updateAppointment(id: string, updates: Partial<Appointment>): Promise<{ success: boolean; data: Appointment }> {
     return httpClient.patch(`/appointments/${id}`, updates);
   },
+};
+
+// Public API for booking (no authentication required)
+export const publicBookingApi = {
+  async createAppointment(appointmentData: {
+    patientName: string;
+    doctorName: string;
+    date: string;
+    time: string;
+    reason?: string;
+    phone?: string;
+    email?: string;
+  }): Promise<{ success: boolean; message: string; data: Appointment }> {
+    return httpClient.post('/public/appointments', appointmentData);
+  }
+};
+
+// Public API for doctors (no authentication required)
+export const publicDoctorsApi = {
+  async getDoctors(): Promise<{ success: boolean; data: Doctor[] }> {
+    return httpClient.get('/public/doctors');
+  }
 };
 
 export const prescriptionsApi = {

@@ -77,9 +77,17 @@ app.get('/api/appointments', async (req, res) => {
   }
 });
 
-// Create appointment
-app.post('/api/appointments', async (req, res) => {
+// ===========================================
+// PUBLIC ROUTES (No Authentication Required)
+// ===========================================
+
+// Public appointment booking (for frontend booking page)
+app.post('/api/public/appointments', async (req, res) => {
   try {
+    console.log('Clinic Service: Appointment creation request received');
+    console.log('Request body:', req.body);
+    console.log('Request headers:', req.headers);
+    
     const { patientName, doctorName, date, time, reason, phone, email } = req.body;
     
     console.log('Creating appointment with data:', { patientName, doctorName, date, time, reason, phone, email });
@@ -157,7 +165,7 @@ app.post('/api/appointments', async (req, res) => {
       scheduledAt: new Date(`${date}T${time}:00`),
       status: 'scheduled',
       reason: reason || 'General consultation',
-      createdBy: req.user?.userId || patient._id // Use patient ID if no authenticated user
+      createdBy: patient._id // Use patient ID as creator for public bookings
     });
     
     console.log('Saving appointment to database...');
@@ -193,6 +201,44 @@ app.post('/api/appointments', async (req, res) => {
     });
   }
 });
+
+// Public doctors list (for booking page)
+app.get('/api/public/doctors', async (req, res) => {
+  try {
+    console.log('Clinic Service: Public doctors request received');
+    
+    const doctors = await User.find({ 
+      role: 'doctor', 
+      isActive: true 
+    }).select('firstName lastName email doctorInfo');
+
+    const formattedDoctors = doctors.map(doctor => ({
+      id: doctor._id,
+      name: `Dr. ${doctor.firstName} ${doctor.lastName}`,
+      email: doctor.email,
+      specialty: doctor.doctorInfo?.specialization?.[0] || 'General Medicine',
+      experience: doctor.doctorInfo?.experience || 0,
+      qualification: doctor.doctorInfo?.qualification || '',
+      consultationFee: doctor.doctorInfo?.consultationFee || 500,
+      rating: 4.8 // Default rating
+    }));
+    
+    res.json({
+      success: true,
+      data: formattedDoctors
+    });
+  } catch (error) {
+    console.error('Get public doctors error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch doctors',
+      code: 'FETCH_ERROR'
+    });
+  }
+});
+
+// ===========================================
+// PROTECTED ROUTES (Authentication Required)
+// ===========================================
 
 // Get appointment by ID
 app.get('/api/appointments/:id', async (req, res) => {
@@ -888,6 +934,10 @@ app.get('/api/doctors', async (req, res) => {
 // Create new doctor account
 app.post('/api/admin/doctors', async (req, res) => {
   try {
+    console.log('Clinic Service: Doctor creation request received');
+    console.log('Request body:', req.body);
+    console.log('Request headers:', req.headers);
+    
     const { 
       firstName, 
       lastName, 
