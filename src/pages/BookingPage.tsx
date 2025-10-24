@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Calendar, Clock, User, Phone, Mail, Stethoscope, CheckCircle, ArrowRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Calendar, Clock, User, Phone, Mail, Stethoscope, CheckCircle, ArrowRight, Loader2 } from 'lucide-react'
+import { doctorsApi, appointmentsApi, type Doctor } from '../services/api'
 
 export function BookingPage() {
   const [form, setForm] = useState({ 
@@ -15,17 +16,37 @@ export function BookingPage() {
   })
   const [step, setStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [doctors, setDoctors] = useState<Doctor[]>([])
+  const [isLoadingDoctors, setIsLoadingDoctors] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Load doctors on component mount
+  useEffect(() => {
+    loadDoctors()
+  }, [])
+
+  const loadDoctors = async () => {
+    try {
+      setIsLoadingDoctors(true)
+      setError(null)
+      const response = await doctorsApi.getDoctors()
+      
+      if (response.success) {
+        setDoctors(response.data)
+      } else {
+        setError('Failed to load doctors')
+      }
+    } catch (err) {
+      setError('Failed to load doctors')
+      console.error('Error loading doctors:', err)
+    } finally {
+      setIsLoadingDoctors(false)
+    }
+  }
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
-
-  const doctors = [
-    { id: 'doc_1', name: 'Dr. Sarah Sharma', specialty: 'General Medicine', experience: '15 years', rating: 4.9 },
-    { id: 'doc_2', name: 'Dr. Michael Rao', specialty: 'Cardiology', experience: '12 years', rating: 4.8 },
-    { id: 'doc_3', name: 'Dr. Emily Chen', specialty: 'Pediatrics', experience: '10 years', rating: 4.9 },
-    { id: 'doc_4', name: 'Dr. David Kumar', specialty: 'Emergency Medicine', experience: '8 years', rating: 4.7 }
-  ]
 
   const timeSlots = [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -35,41 +56,98 @@ export function BookingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError(null)
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    setIsSubmitting(false)
-    setStep(3) // Success step
+    try {
+      const selectedDoctor = doctors.find(d => d.id === form.doctorId)
+      const appointmentData = {
+        patientName: form.name,
+        doctorName: selectedDoctor?.name || 'General Doctor',
+        date: form.date,
+        time: form.time,
+        reason: form.reason,
+        phone: form.phone,
+        email: form.email
+      }
+
+      console.log('Submitting appointment data:', appointmentData)
+      console.log('Selected doctor:', selectedDoctor)
+
+      const response = await appointmentsApi.createAppointment(appointmentData)
+      console.log('Appointment API response:', response)
+      
+      if (response.success) {
+        setStep(3) // Success step
+      } else {
+        setError('Failed to book appointment. Please try again.')
+      }
+    } catch (err) {
+      setError('Failed to book appointment. Please try again.')
+      console.error('Error booking appointment:', err)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (step === 3) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center animate-in fade-in-50 slide-in-from-bottom-4 duration-500">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-in zoom-in-50 duration-700">
+            <CheckCircle className="w-10 h-10 text-green-600 animate-in scale-in-50 duration-500" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Appointment Booked!</h2>
-          <p className="text-gray-600 mb-6">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4 animate-in fade-in-50 slide-in-from-bottom-2 duration-700">
+            🎉 Appointment Booked!
+          </h2>
+          <p className="text-gray-600 mb-6 animate-in fade-in-50 slide-in-from-bottom-2 duration-700 delay-200">
             Your appointment has been successfully scheduled. You'll receive a confirmation email shortly.
           </p>
-          <div className="bg-blue-50 rounded-lg p-4 mb-6">
-            <div className="text-sm text-blue-800">
-              <div className="font-semibold">Appointment Details:</div>
-              <div className="mt-2 space-y-1">
-                <div>Date: {form.date}</div>
-                <div>Time: {form.time}</div>
-                <div>Doctor: {doctors.find(d => d.id === form.doctorId)?.name}</div>
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-6 mb-6 animate-in fade-in-50 slide-in-from-bottom-2 duration-700 delay-300">
+            <div className="text-sm text-gray-800">
+              <div className="font-semibold text-lg mb-3">Appointment Details:</div>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="font-medium">Date:</span>
+                  <span>{new Date(form.date).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Time:</span>
+                  <span>{form.time}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Doctor:</span>
+                  <span>{doctors.find(d => d.id === form.doctorId)?.name || 'General Doctor'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium">Patient:</span>
+                  <span>{form.name}</span>
+                </div>
               </div>
             </div>
           </div>
-          <button 
-            onClick={() => { setStep(1); setForm({ name: '', phone: '', email: '', date: '', time: '', doctorId: '', reason: '', age: '', gender: '' }) }}
-            className="btn-primary w-full"
-          >
-            Book Another Appointment
-          </button>
+          <div className="space-y-3">
+            <button 
+              onClick={() => { 
+                setStep(1); 
+                setForm({ name: '', phone: '', email: '', date: '', time: '', doctorId: '', reason: '', age: '', gender: '' });
+                setError(null);
+              }}
+              className="btn-primary w-full animate-in fade-in-50 slide-in-from-bottom-2 duration-700 delay-400"
+            >
+              Book Another Appointment
+            </button>
+            <button 
+              onClick={() => window.location.href = '/'}
+              className="btn-secondary w-full animate-in fade-in-50 slide-in-from-bottom-2 duration-700 delay-500"
+            >
+              Return to Home
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -232,32 +310,58 @@ export function BookingPage() {
 
                     <div>
                       <label className="form-label">Select Doctor (Optional)</label>
-                      <div className="grid gap-3">
-                        {doctors.map(doctor => (
-                          <label key={doctor.id} className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
-                            <input 
-                              type="radio" 
-                              name="doctor" 
-                              value={doctor.id}
-                              checked={form.doctorId === doctor.id}
-                              onChange={(e)=>update('doctorId', e.target.value)}
-                              className="mr-3"
-                            />
-                            <div className="flex-1">
-                              <div className="font-semibold text-gray-900">{doctor.name}</div>
-                              <div className="text-sm text-gray-600">{doctor.specialty} • {doctor.experience}</div>
-                              <div className="flex items-center mt-1">
-                                <div className="flex text-yellow-400">
-                                  {[...Array(5)].map((_, i) => (
-                                    <span key={i} className={i < Math.floor(doctor.rating) ? 'text-yellow-400' : 'text-gray-300'}>★</span>
-                                  ))}
-                                </div>
-                                <span className="text-sm text-gray-600 ml-2">{doctor.rating}</span>
-                              </div>
+                      {isLoadingDoctors ? (
+                        <div className="flex items-center justify-center p-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                          <span className="ml-2 text-gray-600">Loading doctors...</span>
+                        </div>
+                      ) : error ? (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                          <div className="text-red-800 text-sm">
+                            {error}
+                            <button 
+                              onClick={loadDoctors}
+                              className="ml-2 text-red-600 hover:text-red-500 underline"
+                            >
+                              Try again
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid gap-3">
+                          {doctors.length === 0 ? (
+                            <div className="text-center py-4 text-gray-500">
+                              No doctors available at the moment
                             </div>
-                          </label>
-                        ))}
-                      </div>
+                          ) : (
+                            doctors.map(doctor => (
+                              <label key={doctor.id} className="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                                <input 
+                                  type="radio" 
+                                  name="doctor" 
+                                  value={doctor.id}
+                                  checked={form.doctorId === doctor.id}
+                                  onChange={(e)=>update('doctorId', e.target.value)}
+                                  className="mr-3"
+                                />
+                                <div className="flex-1">
+                                  <div className="font-semibold text-gray-900">{doctor.name}</div>
+                                  <div className="text-sm text-gray-600">{doctor.specialty} • {doctor.experience} years experience</div>
+                                  <div className="flex items-center mt-1">
+                                    <div className="flex text-yellow-400">
+                                      {[...Array(5)].map((_, i) => (
+                                        <span key={i} className={i < Math.floor(doctor.rating) ? 'text-yellow-400' : 'text-gray-300'}>★</span>
+                                      ))}
+                                    </div>
+                                    <span className="text-sm text-gray-600 ml-2">{doctor.rating}</span>
+                                    <span className="text-sm text-gray-500 ml-2">• ₹{doctor.consultationFee} consultation fee</span>
+                                  </div>
+                                </div>
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -271,6 +375,12 @@ export function BookingPage() {
                       />
                     </div>
                   </div>
+                  
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="text-red-800 text-sm">{error}</div>
+                    </div>
+                  )}
                   
                   <div className="flex justify-between mt-8">
                     <button 
@@ -287,7 +397,7 @@ export function BookingPage() {
                     >
                       {isSubmitting ? (
                         <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
                           Booking...
                         </>
                       ) : (

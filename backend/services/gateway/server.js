@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: '../../.env' });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -351,6 +351,8 @@ app.use('/api/pharmacy', authenticateToken, clinicProxy);
 app.use('/api/analytics', authenticateToken, clinicProxy);
 app.use('/api/notifications', authenticateToken, clinicProxy);
 app.use('/api/patients', authenticateToken, clinicProxy);
+app.use('/api/doctors', authenticateToken, clinicProxy);
+app.use('/api/admin', authenticateToken, clinicProxy);
 
 // Route files to files service
 app.use('/api/files', authenticateToken, filesProxy);

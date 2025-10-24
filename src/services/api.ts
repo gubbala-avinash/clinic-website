@@ -53,6 +53,17 @@ export interface Prescription {
   diagnosis: string;
 }
 
+export interface Doctor {
+  id: string;
+  name: string;
+  email: string;
+  specialty: string;
+  experience: number;
+  qualification: string;
+  consultationFee: number;
+  rating: number;
+}
+
 export interface Analytics {
   totalPatients: number;
   totalAppointments: number;
@@ -207,6 +218,37 @@ export const pharmacyApi = {
 
   async fulfillPrescription(id: string, data: { status: string; notes?: string }): Promise<{ success: boolean; data: any }> {
     return httpClient.patch(`/pharmacy/${id}/fulfill`, data);
+  },
+};
+
+export const doctorsApi = {
+  async getDoctors(): Promise<{ success: boolean; data: Doctor[] }> {
+    return httpClient.get('/doctors');
+  },
+};
+
+export const adminApi = {
+  async createDoctor(doctorData: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    qualification?: string;
+    specialization?: string[];
+    experience?: number;
+    licenseNumber?: string;
+    consultationFee?: number;
+  }): Promise<{ success: boolean; message: string; data: any }> {
+    return httpClient.post('/admin/doctors', doctorData);
+  },
+
+  async createReceptionist(receptionistData: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  }): Promise<{ success: boolean; message: string; data: any }> {
+    return httpClient.post('/admin/receptionists', receptionistData);
   },
 };
 
