@@ -75,7 +75,7 @@ app.get('/api/appointments', async (req, res) => {
       .limit(100);
     
     const formattedAppointments = appointments.map(apt => {
-      // Handle null patientId or doctorId with safe fallbacks
+      // Handle null patientId or doctorId
       const patientName = apt.patientId 
         ? `${apt.patientId.firstName || 'Unknown'} ${apt.patientId.lastName || 'Patient'}`
         : 'Unknown Patient';
@@ -122,6 +122,42 @@ app.get('/api/appointments', async (req, res) => {
       error: 'Failed to fetch appointments',
       code: 'FETCH_ERROR',
       details: error.message
+    });
+  }
+});
+
+// Data cleanup endpoint for orphaned appointments
+app.get('/api/appointments/cleanup', async (req, res) => {
+  try {
+    // Find appointments with null patientId or doctorId
+    const orphanedAppointments = await Appointment.find({
+      $or: [
+        { patientId: null },
+        { doctorId: null }
+      ]
+    });
+
+    console.log(`Found ${orphanedAppointments.length} orphaned appointments`);
+
+    // Optionally delete orphaned appointments (uncomment if needed)
+    // await Appointment.deleteMany({
+    //   $or: [
+    //     { patientId: null },
+    //     { doctorId: null }
+    //   ]
+    // });
+
+    res.json({
+      success: true,
+      message: `Found ${orphanedAppointments.length} orphaned appointments`,
+      orphanedCount: orphanedAppointments.length,
+      orphanedIds: orphanedAppointments.map(apt => apt._id)
+    });
+  } catch (error) {
+    console.error('Cleanup appointments error:', error);
+    res.status(500).json({
+      error: 'Failed to cleanup appointments',
+      code: 'CLEANUP_ERROR'
     });
   }
 });
