@@ -74,27 +74,54 @@ app.get('/api/appointments', async (req, res) => {
       .sort({ scheduledAt: -1 })
       .limit(100);
     
-    const formattedAppointments = appointments.map(apt => ({
-      id: apt._id,
-      patientName: `${apt.patientId.firstName} ${apt.patientId.lastName}`,
-      doctorName: `Dr. ${apt.doctorId.firstName} ${apt.doctorId.lastName}`,
-      date: apt.scheduledAt.toISOString().split('T')[0],
-      time: apt.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
-      status: apt.status,
-      reason: apt.reason,
-      phone: apt.patientId.phone,
-      email: apt.patientId.email
-    }));
+    const formattedAppointments = appointments.map(apt => {
+      // Handle null patientId or doctorId with safe fallbacks
+      const patientName = apt.patientId 
+        ? `${apt.patientId.firstName || 'Unknown'} ${apt.patientId.lastName || 'Patient'}`
+        : 'Unknown Patient';
+      
+      const doctorName = apt.doctorId 
+        ? `Dr. ${apt.doctorId.firstName || 'Unknown'} ${apt.doctorId.lastName || 'Doctor'}`
+        : 'Unknown Doctor';
+      
+      const phone = apt.patientId?.phone || 'N/A';
+      const email = apt.patientId?.email || 'N/A';
+      
+      // Log data quality issues for debugging
+      if (!apt.patientId) {
+        console.warn(`Appointment ${apt._id} has null patientId`);
+      }
+      if (!apt.doctorId) {
+        console.warn(`Appointment ${apt._id} has null doctorId`);
+      }
+      
+      return {
+        id: apt._id,
+        patientName,
+        doctorName,
+        date: apt.scheduledAt.toISOString().split('T')[0],
+        time: apt.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+        status: apt.status,
+        reason: apt.reason || 'No reason provided',
+        phone,
+        email
+      };
+    });
     
     res.json({
       success: true,
-      data: formattedAppointments
+      data: formattedAppointments,
+      total: formattedAppointments.length,
+      orphanedCount: formattedAppointments.filter(apt => 
+        apt.patientName === 'Unknown Patient' || apt.doctorName === 'Unknown Doctor'
+      ).length
     });
   } catch (error) {
     console.error('Get appointments error:', error);
     res.status(500).json({
       error: 'Failed to fetch appointments',
-      code: 'FETCH_ERROR'
+      code: 'FETCH_ERROR',
+      details: error.message
     });
   }
 });
@@ -412,6 +439,42 @@ app.patch('/api/appointments/:id', async (req, res) => {
     res.status(500).json({
       error: 'Failed to update appointment',
       code: 'UPDATE_ERROR'
+    });
+  }
+});
+
+// Data cleanup endpoint for orphaned appointments
+app.get('/api/appointments/cleanup', async (req, res) => {
+  try {
+    // Find appointments with null patientId or doctorId
+    const orphanedAppointments = await Appointment.find({
+      $or: [
+        { patientId: null },
+        { doctorId: null }
+      ]
+    });
+
+    console.log(`Found ${orphanedAppointments.length} orphaned appointments`);
+
+    // Optionally delete orphaned appointments (uncomment if needed)
+    // await Appointment.deleteMany({
+    //   $or: [
+    //     { patientId: null },
+    //     { doctorId: null }
+    //   ]
+    // });
+
+    res.json({
+      success: true,
+      message: `Found ${orphanedAppointments.length} orphaned appointments`,
+      orphanedCount: orphanedAppointments.length,
+      orphanedIds: orphanedAppointments.map(apt => apt._id)
+    });
+  } catch (error) {
+    console.error('Cleanup appointments error:', error);
+    res.status(500).json({
+      error: 'Failed to cleanup appointments',
+      code: 'CLEANUP_ERROR'
     });
   }
 });
@@ -912,23 +975,20 @@ const generatePrescriptionPDF = async (prescriptionData) => {
           border: 2px solid #e5e7eb;
           border-radius: 8px;
           margin: 20px 0;
-          min-height: 1200px;
+          min-height: 600px;
           background: white;
           padding: 10px;
-          overflow: hidden;
         }
         .whiteboard-image {
-          width: 200%;
+          width: 100%;
           height: auto;
-          min-height: 1000px;
-          max-height: 1600px;
+          min-height: 500px;
+          max-height: 800px;
           border-radius: 6px;
           object-fit: contain;
           background: white;
           border: 1px solid #e5e7eb;
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          transform: scale(2);
-          transform-origin: top left;
         }
         .medications-section {
           margin: 20px 0;

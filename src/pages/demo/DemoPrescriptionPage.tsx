@@ -385,8 +385,8 @@ export function DemoPrescriptionPage() {
       const tempCtx = tempCanvas.getContext('2d')
       if (!tempCtx) return
 
-      // Scale up the canvas for much larger text (4x resolution)
-      const scale = 4 // 4x resolution for much larger text
+      // Scale up the canvas for better quality
+      const scale = 2 // 2x resolution
       tempCanvas.width = canvas.width * scale
       tempCanvas.height = canvas.height * scale
       
@@ -427,8 +427,8 @@ export function DemoPrescriptionPage() {
       const tempCtx = tempCanvas.getContext('2d')
       if (!tempCtx) return
 
-      // Scale up the canvas for much larger text (4x resolution)
-      const scale = 4 // 4x resolution for much larger text
+      // Scale up the canvas for better quality
+      const scale = 2 // 2x resolution
       tempCanvas.width = canvas.width * scale
       tempCanvas.height = canvas.height * scale
       
@@ -507,8 +507,8 @@ export function DemoPrescriptionPage() {
       const tempCtx = tempCanvas.getContext('2d')
       if (!tempCtx) return
 
-      // Scale up the canvas for much larger text (4x resolution)
-      const scale = 4 // 4x resolution for much larger text
+      // Scale up the canvas for better quality
+      const scale = 2 // 2x resolution
       tempCanvas.width = canvas.width * scale
       tempCanvas.height = canvas.height * scale
       
