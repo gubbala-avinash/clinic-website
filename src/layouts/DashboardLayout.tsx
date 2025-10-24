@@ -26,6 +26,7 @@ export function DashboardLayout() {
   const navigation = [
     { name: 'Dashboard', href: '/admin', icon: Home, roles: ['admin', 'receptionist'] },
     { name: 'Patients', href: '/admin/patients', icon: Users, roles: ['admin', 'receptionist'] },
+    { name: 'User Management', href: '/admin/users', icon: User, roles: ['admin'] },
     { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['admin'] },
     { name: 'Doctor Panel', href: '/doctor', icon: Stethoscope, roles: ['doctor'] },
     { name: 'Pharmacy', href: '/pharmacy', icon: Pill, roles: ['pharmacist'] },

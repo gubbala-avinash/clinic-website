@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage'
 import { BookingPage } from './pages/BookingPage'
 import { LoginPage } from './pages/auth/LoginPage'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
+import { UserManagementPage } from './pages/admin/UserManagementPage'
 import { PatientsPage } from './pages/admin/PatientsPage'
 import { SettingsPage } from './pages/admin/SettingsPage'
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard'
@@ -50,6 +51,14 @@ export default function App() {
               element={
                 <RoleRoute allow={["admin", "receptionist"]}>
                   <AdminDashboard />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="admin/users"
+              element={
+                <RoleRoute allow={["admin"]}>
+                  <UserManagementPage />
                 </RoleRoute>
               }
             />

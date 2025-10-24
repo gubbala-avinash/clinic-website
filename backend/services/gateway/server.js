@@ -44,8 +44,8 @@ app.use(cors({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 5 * 60 * 1000, // 5 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // limit each IP to 1000 requests per windowMs
   message: {
     error: 'Too many requests from this IP, please try again later.',
   },
@@ -527,6 +527,274 @@ app.get('/api/public/health', (req, res) => {
   });
 });
 
+// Admin doctor creation (handled directly in gateway)
+app.post('/api/admin/doctors', async (req, res) => {
+  try {
+    console.log('Gateway: Processing doctor creation directly');
+    console.log('Request data:', req.body);
+    
+    const { 
+      firstName, 
+      lastName, 
+      email, 
+      phone, 
+      qualification, 
+      specialization, 
+      experience, 
+      licenseNumber, 
+      consultationFee 
+    } = req.body;
+    
+    // Validation
+    if (!firstName || !lastName || !email || !phone) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        code: 'MISSING_FIELDS'
+      });
+    }
+    
+    // Import User model
+    const { User } = await import('../shared/models/User.js');
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'User already exists',
+        code: 'USER_EXISTS'
+      });
+    }
+    
+    // Hash the password
+    const bcrypt = await import('bcryptjs');
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    const hashedPassword = await bcrypt.default.hash('doctor123', saltRounds);
+    
+    // Create doctor
+    const doctor = new User({
+      firstName,
+      lastName,
+      email,
+      phone,
+      role: 'doctor',
+      password: hashedPassword,
+      isActive: true,
+      doctorInfo: {
+        qualification: qualification || '',
+        specialization: Array.isArray(specialization) ? specialization : (specialization ? [specialization] : ['General Medicine']),
+        licenseNumber: licenseNumber || '',
+        experience: experience || 0,
+        consultationFee: consultationFee || 500
+      }
+    });
+    
+    console.log('Saving doctor to database...');
+    await doctor.save();
+    console.log('Doctor saved successfully');
+    
+    // Remove password from response
+    const doctorResponse = doctor.toObject();
+    delete doctorResponse.password;
+    
+    res.status(201).json({
+      success: true,
+      message: 'Doctor account created successfully',
+      data: doctorResponse
+    });
+  } catch (error) {
+    console.error('Gateway: Create doctor error:', error);
+    res.status(500).json({
+      error: 'Failed to create doctor account',
+      code: 'CREATE_ERROR'
+    });
+  }
+});
+
+// Update appointment (reschedule/cancel)
+app.patch('/api/appointments/:id', async (req, res) => {
+  try {
+    console.log('Gateway: Processing appointment update directly');
+    console.log('Request data:', req.body);
+    
+    const { id } = req.params;
+    const { status, date, time, reason, notes } = req.body;
+    
+    // Import models
+    const { Appointment } = await import('../shared/models/Appointment.js');
+    
+    // Find appointment
+    const appointment = await Appointment.findById(id);
+    if (!appointment) {
+      return res.status(404).json({
+        error: 'Appointment not found',
+        code: 'NOT_FOUND'
+      });
+    }
+    
+    // Update appointment
+    if (status) {
+      appointment.status = status;
+      
+      // Set timing fields based on status
+      if (status === 'checked-in') {
+        appointment.checkedInAt = new Date();
+      } else if (status === 'in-progress') {
+        appointment.startedAt = new Date();
+      } else if (status === 'completed') {
+        appointment.completedAt = new Date();
+      }
+    }
+    
+    if (date && time) {
+      appointment.scheduledAt = new Date(`${date}T${time}:00`);
+    }
+    
+    if (reason) {
+      appointment.reason = reason;
+    }
+    
+    if (notes) {
+      appointment.notes = notes;
+    }
+    
+    console.log('Saving updated appointment...');
+    await appointment.save();
+    console.log('Appointment updated successfully');
+    
+    // Populate the response
+    await appointment.populate('patientId', 'firstName lastName email phone');
+    await appointment.populate('doctorId', 'firstName lastName email');
+    
+    const formattedAppointment = {
+      id: appointment._id,
+      patientName: `${appointment.patientId.firstName} ${appointment.patientId.lastName}`,
+      doctorName: `Dr. ${appointment.doctorId.firstName} ${appointment.doctorId.lastName}`,
+      date: appointment.scheduledAt.toISOString().split('T')[0],
+      time: appointment.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+      status: appointment.status,
+      reason: appointment.reason,
+      phone: appointment.patientId.phone,
+      email: appointment.patientId.email
+    };
+    
+    res.json({
+      success: true,
+      message: 'Appointment updated successfully',
+      data: formattedAppointment
+    });
+  } catch (error) {
+    console.error('Gateway: Update appointment error:', error);
+    res.status(500).json({
+      error: 'Failed to update appointment',
+      code: 'UPDATE_ERROR'
+    });
+  }
+});
+
+// Get all users (doctors and receptionists)
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    console.log('Gateway: Processing get users request directly');
+    
+    // Import User model
+    const { User } = await import('../shared/models/User.js');
+    
+    const users = await User.find({ 
+      role: { $in: ['doctor', 'receptionist'] },
+      isActive: true 
+    }).select('firstName lastName email phone role doctorInfo createdAt');
+
+    const formattedUsers = users.map(user => ({
+      id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      isActive: user.isActive,
+      doctorInfo: user.doctorInfo,
+      createdAt: user.createdAt
+    }));
+    
+    res.json({
+      success: true,
+      data: formattedUsers
+    });
+  } catch (error) {
+    console.error('Gateway: Get users error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch users',
+      code: 'FETCH_ERROR'
+    });
+  }
+});
+
+// Admin receptionist creation (handled directly in gateway)
+app.post('/api/admin/receptionists', async (req, res) => {
+  try {
+    console.log('Gateway: Processing receptionist creation directly');
+    console.log('Request data:', req.body);
+    
+    const { firstName, lastName, email, phone } = req.body;
+    
+    // Validation
+    if (!firstName || !lastName || !email || !phone) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        code: 'MISSING_FIELDS'
+      });
+    }
+    
+    // Import User model
+    const { User } = await import('../shared/models/User.js');
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'User already exists',
+        code: 'USER_EXISTS'
+      });
+    }
+    
+    // Hash the password
+    const bcrypt = await import('bcryptjs');
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    const hashedPassword = await bcrypt.default.hash('doctor123', saltRounds);
+    
+    // Create receptionist
+    const receptionist = new User({
+      firstName,
+      lastName,
+      email,
+      phone,
+      role: 'receptionist',
+      password: hashedPassword,
+      isActive: true
+    });
+    
+    console.log('Saving receptionist to database...');
+    await receptionist.save();
+    console.log('Receptionist saved successfully');
+    
+    // Remove password from response
+    const receptionistResponse = receptionist.toObject();
+    delete receptionistResponse.password;
+    
+    res.status(201).json({
+      success: true,
+      message: 'Receptionist account created successfully',
+      data: receptionistResponse
+    });
+  } catch (error) {
+    console.error('Gateway: Create receptionist error:', error);
+    res.status(500).json({
+      error: 'Failed to create receptionist account',
+      code: 'CREATE_ERROR'
+    });
+  }
+});
+
 // Protected routes (authentication required)
 app.use('/api/appointments', authenticateToken, clinicProxy);
 app.use('/api/prescriptions', authenticateToken, clinicProxy);
@@ -535,7 +803,6 @@ app.use('/api/analytics', authenticateToken, clinicProxy);
 app.use('/api/notifications', authenticateToken, clinicProxy);
 app.use('/api/patients', authenticateToken, clinicProxy);
 app.use('/api/doctors', authenticateToken, clinicProxy);
-app.use('/api/admin', authenticateToken, clinicProxy);
 
 // Route files to files service
 app.use('/api/files', authenticateToken, filesProxy);

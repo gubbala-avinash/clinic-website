@@ -199,6 +199,14 @@ export const appointmentsApi = {
   async updateAppointment(id: string, updates: Partial<Appointment>): Promise<{ success: boolean; data: Appointment }> {
     return httpClient.patch(`/appointments/${id}`, updates);
   },
+
+  async rescheduleAppointment(id: string, date: string, time: string): Promise<{ success: boolean; message: string; data: Appointment }> {
+    return httpClient.patch(`/appointments/${id}`, { date, time });
+  },
+
+  async cancelAppointment(id: string): Promise<{ success: boolean; message: string; data: Appointment }> {
+    return httpClient.patch(`/appointments/${id}`, { status: 'cancelled' });
+  },
 };
 
 // Public API for booking (no authentication required)
@@ -275,6 +283,10 @@ export const adminApi = {
     phone: string;
   }): Promise<{ success: boolean; message: string; data: any }> {
     return httpClient.post('/admin/receptionists', receptionistData);
+  },
+
+  async getUsers(): Promise<{ success: boolean; data: any[] }> {
+    return httpClient.get('/admin/users');
   },
 };
 
