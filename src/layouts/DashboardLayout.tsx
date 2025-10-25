@@ -138,7 +138,7 @@ export function DashboardLayout() {
                   <h1 className="text-lg font-semibold text-gray-900">
                     {user?.role === 'admin' || user?.role === 'receptionist' ? 'Admin Dashboard' :
                      user?.role === 'doctor' ? 'Doctor Panel' :
-                     user?.role === 'pharmacist' ? 'Pharmacy Dashboard' : 'Dashboard'}
+                     user?.role === 'pharmacy' ? 'Pharmacy Dashboard' : 'Dashboard'}
                   </h1>
                 <p className="text-sm text-gray-500">
                   {new Date().toLocaleDateString('en-US', { 

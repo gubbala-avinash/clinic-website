@@ -439,15 +439,24 @@ export function DemoPrescriptionPage() {
       const whiteboardData = tempCanvas.toDataURL('image/png', 1.0).split(',')[1] // High quality PNG
       
       const prescriptionData = {
+        // Required fields for database (demo uses mock IDs)
+        appointmentId: 'demo_appointment_123',
+        patientId: 'demo_patient_123',
+        
+        // Prescription data
         ...prescription,
         whiteboardData,
         doctorSignature,
+        
+        // Patient information
         patientName: DEMO_PATIENT.name,
         patientAge: DEMO_PATIENT.age,
         patientGender: DEMO_PATIENT.gender,
         patientPhone: DEMO_PATIENT.phone,
         patientEmail: DEMO_PATIENT.email,
         patientAddress: DEMO_PATIENT.address,
+        
+        // Prescription metadata
         prescriptionId: prescription.id,
         currentDate: new Date().toLocaleDateString('en-US', {
           year: 'numeric',
@@ -519,15 +528,24 @@ export function DemoPrescriptionPage() {
       const whiteboardData = tempCanvas.toDataURL('image/png', 1.0).split(',')[1] // High quality PNG
       
       const prescriptionData = {
+        // Required fields for database (demo uses mock IDs)
+        appointmentId: 'demo_appointment_123',
+        patientId: 'demo_patient_123',
+        
+        // Prescription data
         ...prescription,
         whiteboardData,
         doctorSignature,
+        
+        // Patient information
         patientName: DEMO_PATIENT.name,
         patientAge: DEMO_PATIENT.age,
         patientGender: DEMO_PATIENT.gender,
         patientPhone: DEMO_PATIENT.phone,
         patientEmail: DEMO_PATIENT.email,
         patientAddress: DEMO_PATIENT.address,
+        
+        // Prescription metadata
         prescriptionId: prescription.id,
         currentDate: new Date().toLocaleDateString('en-US', {
           year: 'numeric',

@@ -8,6 +8,7 @@ import { connectDB } from '../shared/database.js';
 import { User } from '../shared/models/User.js';
 import { Appointment } from '../shared/models/Appointment.js';
 import { Prescription } from '../shared/models/Prescription.js';
+import { PharmacyOrder } from '../shared/models/PharmacyOrder.js';
 import { localFileStorage } from '../shared/localStorage.js';
 import multer from 'multer';
 import path from 'path';
@@ -15,6 +16,7 @@ import fs from 'fs';
 import puppeteer from 'puppeteer';
 import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -747,14 +749,28 @@ app.get('/api/doctor/appointments', authenticateToken, async (req, res) => {
     }
     
     // Find appointments for this specific doctor with 'waiting' status
+    console.log('=== DOCTOR APPOINTMENTS DEBUG ===');
+    console.log('User ID:', user.id);
+    console.log('User ID type:', typeof user.id);
+    console.log('ObjectId version:', new mongoose.Types.ObjectId(user.id));
+    
     const appointments = await Appointment.find({ 
-      doctorId: user.id,
+      doctorId: new mongoose.Types.ObjectId(user.id),
       status: 'waiting'
     })
       .populate('patientId', 'firstName lastName email phone')
       .populate('doctorId', 'firstName lastName email')
       .sort({ scheduledAt: -1 })
       .limit(100);
+    
+    console.log('Found appointments:', appointments.length);
+    console.log('Appointments:', appointments.map(apt => ({
+      id: apt._id,
+      doctorId: apt.doctorId,
+      status: apt.status,
+      patientName: apt.patientId ? `${apt.patientId.firstName} ${apt.patientId.lastName}` : 'No patient'
+    })));
+    console.log('================================');
     
     const formattedAppointments = appointments.map(apt => {
       // Handle null patientId or doctorId
@@ -1076,6 +1092,8 @@ app.post('/api/prescriptions/generate-and-save-pdf', authenticateToken, async (r
     }
 
     const {
+      appointmentId,
+      patientId,
       patientName,
       patientAge,
       patientGender,
@@ -1093,10 +1111,75 @@ app.post('/api/prescriptions/generate-and-save-pdf', authenticateToken, async (r
       notes,
       whiteboardData,
       doctorSignature,
-      currentDate,
-      prescriptionId
+      currentDate
     } = req.body;
 
+    // Debug: Log the received data
+    console.log('=== PRESCRIPTION CREATION DEBUG ===');
+    console.log('Received appointmentId:', appointmentId, 'type:', typeof appointmentId);
+    console.log('Received patientId:', patientId, 'type:', typeof patientId);
+    console.log('Received patientName:', patientName);
+    console.log('================================');
+
+    // Validate required fields - only essential ones
+    if (!appointmentId) {
+      return res.status(400).json({
+        error: 'Missing required fields: appointmentId is required',
+        code: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // If patientId is not provided, try to get it from the appointment
+    let finalPatientId = patientId;
+    if (!finalPatientId) {
+      console.log('PatientId not provided, attempting to get from appointment...');
+      try {
+        const appointment = await Appointment.findById(appointmentId);
+        if (appointment && appointment.patientId) {
+          finalPatientId = appointment.patientId;
+          console.log('Found patientId from appointment:', finalPatientId);
+        } else {
+          console.log('No appointment found or appointment has no patientId');
+        }
+      } catch (error) {
+        console.error('Failed to get patientId from appointment:', error);
+      }
+    }
+
+    if (!finalPatientId) {
+      return res.status(400).json({
+        error: 'Missing required fields: patientId is required and could not be determined from appointment',
+        code: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Validate and convert patientId to ObjectId
+    let patientObjectId;
+    try {
+      patientObjectId = new mongoose.Types.ObjectId(finalPatientId);
+    } catch (error) {
+      console.error('Invalid patientId format:', finalPatientId);
+      return res.status(400).json({
+        error: 'Invalid patientId format',
+        code: 'INVALID_PATIENT_ID'
+      });
+    }
+
+    // Validate and convert appointmentId to ObjectId
+    let appointmentObjectId;
+    try {
+      appointmentObjectId = new mongoose.Types.ObjectId(appointmentId);
+    } catch (error) {
+      console.error('Invalid appointmentId format:', appointmentId);
+      return res.status(400).json({
+        error: 'Invalid appointmentId format',
+        code: 'INVALID_APPOINTMENT_ID'
+      });
+    }
+
+    // Generate unique prescription ID
+    const prescriptionId = `presc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     console.log('Generating and saving PDF for prescription:', prescriptionId);
 
     // Create HTML content for PDF (same as above)
@@ -1329,6 +1412,29 @@ app.post('/api/prescriptions/generate-and-save-pdf', authenticateToken, async (r
     // Calculate relative path for easier access
     const relativePath = path.relative(storageDir, filePath);
     
+    // Create prescription record in database - only essential fields
+    try {
+      const prescription = new Prescription({
+        prescriptionId: prescriptionId,
+        appointmentId: appointmentObjectId,
+        patientId: patientObjectId,
+        doctorId: user.id,
+        prescriptionPdf: relativePath,
+        status: 'submitted'
+      });
+
+      await prescription.save();
+      console.log('Created prescription record in database:', prescriptionId);
+      console.log('PDF path stored:', relativePath);
+    } catch (dbError) {
+      console.error('Failed to create prescription in database:', dbError);
+      return res.status(500).json({
+        error: 'Failed to save prescription to database',
+        code: 'DATABASE_ERROR',
+        details: dbError.message
+      });
+    }
+    
     res.json({
       success: true,
       message: 'Prescription PDF generated and saved successfully',
@@ -1348,6 +1454,180 @@ app.post('/api/prescriptions/generate-and-save-pdf', authenticateToken, async (r
     res.status(500).json({
       error: 'Failed to generate and save PDF',
       code: 'PDF_SAVE_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// ===========================================
+// PRESCRIPTION RETRIEVAL ENDPOINTS
+// ===========================================
+
+// Get prescription by patient ID
+app.get('/api/prescriptions/patient/:patientId', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { patientId } = req.params;
+    
+    // Check if user has access (doctor, admin, receptionist, pharmacy)
+    if (!['doctor', 'admin', 'receptionist', 'pharmacy', 'pharmacist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. Only authorized personnel can access prescriptions.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const prescriptions = await Prescription.find({ patientId })
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email')
+      .populate('appointmentId', 'appointmentId scheduledAt reason')
+      .sort({ createdAt: -1 });
+
+    const formattedPrescriptions = prescriptions.map(prescription => ({
+      id: prescription._id,
+      prescriptionId: prescription.prescriptionId,
+      patientName: `${prescription.patientId.firstName} ${prescription.patientId.lastName}`,
+      doctorName: `Dr. ${prescription.doctorId.firstName} ${prescription.doctorId.lastName}`,
+      appointmentId: prescription.appointmentId?.appointmentId,
+      appointmentDate: prescription.appointmentId?.scheduledAt,
+      reason: prescription.appointmentId?.reason,
+      diagnosis: prescription.diagnosis,
+      medications: prescription.medications,
+      tests: prescription.tests,
+      status: prescription.status,
+      prescriptionPdf: prescription.prescriptionPdf,
+      createdAt: prescription.createdAt,
+      updatedAt: prescription.updatedAt
+    }));
+
+    res.json({
+      success: true,
+      data: formattedPrescriptions,
+      total: formattedPrescriptions.length
+    });
+
+  } catch (error) {
+    console.error('Get prescriptions by patient error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch prescriptions',
+      code: 'FETCH_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Get prescription by appointment ID
+app.get('/api/prescriptions/appointment/:appointmentId', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { appointmentId } = req.params;
+    
+    // Check if user has access
+    if (!['doctor', 'admin', 'receptionist', 'pharmacy', 'pharmacist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. Only authorized personnel can access prescriptions.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const prescription = await Prescription.findOne({ appointmentId })
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email')
+      .populate('appointmentId', 'appointmentId scheduledAt reason');
+
+    if (!prescription) {
+      return res.status(404).json({
+        error: 'Prescription not found for this appointment',
+        code: 'PRESCRIPTION_NOT_FOUND'
+      });
+    }
+
+    const formattedPrescription = {
+      id: prescription._id,
+      prescriptionId: prescription.prescriptionId,
+      patientName: `${prescription.patientId.firstName} ${prescription.patientId.lastName}`,
+      doctorName: `Dr. ${prescription.doctorId.firstName} ${prescription.doctorId.lastName}`,
+      appointmentId: prescription.appointmentId?.appointmentId,
+      appointmentDate: prescription.appointmentId?.scheduledAt,
+      reason: prescription.appointmentId?.reason,
+      diagnosis: prescription.diagnosis,
+      medications: prescription.medications,
+      tests: prescription.tests,
+      status: prescription.status,
+      prescriptionPdf: prescription.prescriptionPdf,
+      createdAt: prescription.createdAt,
+      updatedAt: prescription.updatedAt
+    };
+
+    res.json({
+      success: true,
+      data: formattedPrescription
+    });
+
+  } catch (error) {
+    console.error('Get prescription by appointment error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch prescription',
+      code: 'FETCH_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Serve prescription PDF file
+app.get('/api/prescriptions/pdf/:prescriptionId', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { prescriptionId } = req.params;
+    
+    // Check if user has access
+    if (!['doctor', 'admin', 'receptionist', 'pharmacy', 'pharmacist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. Only authorized personnel can access prescription files.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    // Find prescription in database
+    const prescription = await Prescription.findOne({ prescriptionId });
+    if (!prescription) {
+      return res.status(404).json({
+        error: 'Prescription not found',
+        code: 'PRESCRIPTION_NOT_FOUND'
+      });
+    }
+
+    if (!prescription.prescriptionPdf) {
+      return res.status(404).json({
+        error: 'Prescription PDF not available',
+        code: 'PDF_NOT_AVAILABLE'
+      });
+    }
+
+    // Construct full file path
+    const filePath = path.join(__dirname, '../../storage', prescription.prescriptionPdf);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        error: 'Prescription PDF file not found on server',
+        code: 'FILE_NOT_FOUND'
+      });
+    }
+
+    // Set appropriate headers for PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="prescription_${prescription.prescriptionId}.pdf"`);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    
+    // Send the file
+    res.sendFile(filePath);
+
+  } catch (error) {
+    console.error('Serve prescription PDF error:', error);
+    res.status(500).json({
+      error: 'Failed to serve prescription PDF',
+      code: 'SERVE_ERROR',
       details: error.message
     });
   }
@@ -2263,15 +2543,25 @@ app.get('/api/prescriptions/files/*', authenticateToken, (req, res) => {
   try {
     const user = req.user;
     
-    // Ensure only doctors, admins, and receptionists can access prescription files
-    if (!['doctor', 'admin', 'receptionist'].includes(user.role)) {
+    // Ensure only doctors, admins, receptionists, and pharmacy can access prescription files
+    if (!['doctor', 'admin', 'receptionist', 'pharmacy', 'pharmacist'].includes(user.role)) {
       return res.status(403).json({
         error: 'Access denied. Only authorized personnel can access prescription files.',
         code: 'ACCESS_DENIED'
       });
     }
     
-    const filePath = path.join(__dirname, '../../storage/prescriptions', req.params[0]);
+    // Handle both old and new file paths
+    const requestedPath = req.params[0];
+    let filePath;
+    
+    // Check if it's a relative path (new format)
+    if (requestedPath.startsWith('prescriptions/')) {
+      filePath = path.join(__dirname, '../../storage', requestedPath);
+    } else {
+      // Legacy path format
+      filePath = path.join(__dirname, '../../storage/prescriptions', requestedPath);
+    }
     
     if (fs.existsSync(filePath)) {
       res.setHeader('Content-Type', 'application/pdf');
@@ -2454,45 +2744,169 @@ app.get('/api/pharmacy/appointments', authenticateToken, async (req, res) => {
   try {
     const user = req.user;
 
-    // Check if user has pharmacy access
-    if (!['pharmacy', 'admin', 'receptionist'].includes(user.role)) {
+    // Check if user has pharmacy access (support both 'pharmacy' and 'pharmacist' roles)
+    if (!['pharmacy', 'pharmacist', 'admin', 'receptionist'].includes(user.role)) {
       return res.status(403).json({
         error: 'Access denied. This route is for pharmacy personnel only.',
         code: 'ACCESS_DENIED'
       });
     }
 
-    const appointments = await Appointment.find({ 
-      status: 'completed',
-      prescriptionId: { $exists: true }
-    })
-      .populate('patientId', 'firstName lastName email phone')
-      .populate('doctorId', 'firstName lastName email')
-      .sort({ prescriptionCompletedAt: -1 })
+    console.log('=== PHARMACY APPOINTMENTS DEBUG ===');
+    console.log('User role:', user.role);
+    
+    // Debug: Check what users exist in the database
+    const allUsers = await User.find({}, 'firstName lastName email role').limit(5);
+    console.log('Sample users in database:', allUsers.map(u => ({
+      id: u._id,
+      name: `${u.firstName} ${u.lastName}`,
+      email: u.email,
+      role: u.role
+    })));
+    
+    // Get all prescriptions from the Prescription collection
+    const prescriptions = await Prescription.find({ status: 'submitted' })
+      .populate('patientId', 'firstName lastName email phone role')
+      .populate('doctorId', 'firstName lastName email role')
+      .populate('appointmentId', 'appointmentId scheduledAt reason status')
+      .sort({ createdAt: -1 })
       .limit(100);
+    
+    console.log('Found prescriptions:', prescriptions.length);
+    console.log('Prescriptions with patient details:', prescriptions.map(pres => ({
+      id: pres._id,
+      prescriptionId: pres.prescriptionId,
+      patientId: pres.patientId?._id,
+      patientIdRaw: pres.patientId,
+      patientName: pres.patientId ? `${pres.patientId.firstName} ${pres.patientId.lastName}` : 'No patient',
+      patientEmail: pres.patientId?.email || 'No email',
+      patientPhone: pres.patientId?.phone || 'No phone',
+      patientRole: pres.patientId?.role || 'No role',
+      appointmentId: pres.appointmentId?._id,
+      appointmentStatus: pres.appointmentId?.status || 'No status',
+      prescriptionPdf: pres.prescriptionPdf
+    })));
+    
+    // Debug: Check if patientId is populated or just an ObjectId
+    prescriptions.forEach((pres, index) => {
+      console.log(`Prescription ${index + 1}:`);
+      console.log(`  - patientId type: ${typeof pres.patientId}`);
+      console.log(`  - patientId value: ${pres.patientId}`);
+      console.log(`  - patientId is populated: ${pres.patientId && typeof pres.patientId === 'object' && pres.patientId.firstName}`);
+    });
+    console.log('================================');
 
-    const formattedAppointments = appointments.map(apt => {
-      const patientName = apt.patientId 
-        ? `${apt.patientId.firstName || 'Unknown'} ${apt.patientId.lastName || 'Patient'}`
+    // Fallback: If patient details are missing, manually fetch them
+    const prescriptionsWithDetails = await Promise.all(prescriptions.map(async (pres) => {
+      // Check if patientId is not populated (it's just an ObjectId string)
+      if (!pres.patientId || typeof pres.patientId === 'string' || !pres.patientId.firstName) {
+        console.log(`Patient details missing for prescription ${pres.prescriptionId}, fetching manually...`);
+        console.log(`PatientId type: ${typeof pres.patientId}, value: ${pres.patientId}`);
+        try {
+          // Handle both ObjectId and string cases
+          const patientId = pres.patientId?._id || pres.patientId;
+          console.log(`Looking up patient with ID: ${patientId}`);
+          const patient = await User.findById(patientId);
+          if (patient) {
+            pres.patientId = patient;
+            console.log(`Manually fetched patient: ${patient.firstName} ${patient.lastName}`);
+          } else {
+            console.log(`No patient found with ID: ${patientId}`);
+            // Try to find patient by email or other fields if direct ID lookup fails
+            console.log('Attempting alternative patient lookup...');
+            
+            // Check if the patientId exists in any form in the User collection
+            const allPatients = await User.find({ role: 'patient' }, 'firstName lastName email _id');
+            console.log('All patients in database:', allPatients.map(p => ({
+              id: p._id,
+              name: `${p.firstName} ${p.lastName}`,
+              email: p.email
+            })));
+            
+            // Try to find by string comparison (only if patientId is not null)
+            if (patientId && patientId.toString() !== 'null') {
+              const patientByString = allPatients.find(p => p._id.toString() === patientId.toString());
+              if (patientByString) {
+                console.log(`Found patient by string comparison: ${patientByString.firstName} ${patientByString.lastName}`);
+                pres.patientId = patientByString;
+              }
+            } else {
+              console.log('PatientId is null, cannot perform string comparison');
+              
+              // Fallback: Try to get patient from appointment data
+              if (pres.appointmentId && pres.appointmentId.patientId) {
+                console.log('Attempting to get patient from appointment data...');
+                try {
+                  const appointmentPatient = await User.findById(pres.appointmentId.patientId);
+                  if (appointmentPatient) {
+                    console.log(`Found patient from appointment: ${appointmentPatient.firstName} ${appointmentPatient.lastName}`);
+                    pres.patientId = appointmentPatient;
+                  }
+                } catch (error) {
+                  console.error('Failed to get patient from appointment:', error);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch patient for prescription ${pres.prescriptionId}:`, error);
+        }
+      }
+      return pres;
+    }));
+
+    const formattedAppointments = prescriptionsWithDetails.map(pres => {
+      // Patient details with fallbacks
+      const patientName = pres.patientId 
+        ? `${pres.patientId.firstName || 'Unknown'} ${pres.patientId.lastName || 'Patient'}`
         : 'Unknown Patient';
       
-      const doctorName = apt.doctorId 
-        ? `Dr. ${apt.doctorId.firstName || 'Unknown'} ${apt.doctorId.lastName || 'Doctor'}`
+      const patientPhone = pres.patientId?.phone || 'N/A';
+      const patientEmail = pres.patientId?.email || 'N/A';
+      const patientId = pres.patientId?._id || null;
+      
+      // Doctor details with fallbacks
+      const doctorName = pres.doctorId 
+        ? `Dr. ${pres.doctorId.firstName || 'Unknown'} ${pres.doctorId.lastName || 'Doctor'}`
         : 'Unknown Doctor';
+      
+      const doctorId = pres.doctorId?._id || null;
+      
+      // Appointment details with fallbacks
+      const appointmentDate = pres.appointmentId?.scheduledAt 
+        ? pres.appointmentId.scheduledAt.toISOString().split('T')[0] 
+        : pres.createdAt.toISOString().split('T')[0];
+      
+      const appointmentTime = pres.appointmentId?.scheduledAt 
+        ? pres.appointmentId.scheduledAt.toTimeString().split(' ')[0].substring(0, 5) 
+        : pres.createdAt.toTimeString().split(' ')[0].substring(0, 5);
+      
+      const appointmentReason = pres.appointmentId?.reason || 'No reason provided';
+      const appointmentId = pres.appointmentId?._id || null;
 
       return {
-        id: apt._id,
+        id: appointmentId || pres._id, // Use appointment ID if available, otherwise prescription ID
+        prescriptionId: pres.prescriptionId,
+        patientId,
         patientName,
+        patientPhone,
+        patientEmail,
+        doctorId,
         doctorName,
-        date: apt.scheduledAt.toISOString().split('T')[0],
-        time: apt.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
-        status: apt.status,
-        reason: apt.reason || 'No reason provided',
-        phone: apt.patientId?.phone || 'N/A',
-        email: apt.patientId?.email || 'N/A',
-        prescriptionId: apt.prescriptionId,
-        prescriptionCompletedAt: apt.prescriptionCompletedAt,
-        completedBy: apt.prescriptionCompletedBy
+        appointmentId,
+        date: appointmentDate,
+        time: appointmentTime,
+        status: 'completed',
+        reason: appointmentReason,
+        phone: patientPhone,
+        email: patientEmail,
+        prescriptionCompletedAt: pres.createdAt,
+        completedBy: doctorName,
+        prescriptionPdf: pres.prescriptionPdf,
+        // Additional metadata
+        prescriptionStatus: pres.status,
+        createdAt: pres.createdAt,
+        updatedAt: pres.updatedAt
       };
     });
     
@@ -2507,6 +2921,350 @@ app.get('/api/pharmacy/appointments', authenticateToken, async (req, res) => {
     res.status(500).json({
       error: 'Failed to fetch pharmacy appointments',
       code: 'FETCH_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// ===========================================
+// PHARMACY WORKFLOW ENDPOINTS
+// ===========================================
+
+// Create pharmacy order from completed appointment
+app.post('/api/pharmacy/orders', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user has pharmacy access
+    if (!['pharmacy', 'pharmacist', 'admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. This route is for pharmacy personnel only.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const { appointmentId, prescriptionId } = req.body;
+
+    if (!appointmentId || !prescriptionId) {
+      return res.status(400).json({
+        error: 'Appointment ID and Prescription ID are required',
+        code: 'MISSING_REQUIRED_FIELDS'
+      });
+    }
+
+    // Find the appointment and prescription
+    const appointment = await Appointment.findById(appointmentId)
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email');
+    
+    const prescription = await Prescription.findById(prescriptionId);
+
+    if (!appointment || !prescription) {
+      return res.status(404).json({
+        error: 'Appointment or prescription not found',
+        code: 'NOT_FOUND'
+      });
+    }
+
+    // Check if order already exists
+    const existingOrder = await PharmacyOrder.findOne({ 
+      appointmentId: appointmentId,
+      prescriptionId: prescriptionId 
+    });
+
+    if (existingOrder) {
+      return res.status(400).json({
+        error: 'Pharmacy order already exists for this appointment',
+        code: 'ORDER_EXISTS'
+      });
+    }
+
+    // Generate order ID
+    const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+    // Create pharmacy order
+    const pharmacyOrder = new PharmacyOrder({
+      orderId,
+      appointmentId: appointment._id,
+      prescriptionId: prescription._id,
+      patientId: appointment.patientId._id,
+      doctorId: appointment.doctorId._id,
+      pharmacyId: user.id,
+      medications: prescription.medications.map(med => ({
+        name: med.name,
+        genericName: med.genericName,
+        dosage: med.dosage,
+        frequency: med.frequency,
+        duration: med.duration,
+        quantity: med.quantity,
+        unit: med.unit,
+        instructions: med.instructions
+      })),
+      status: 'pending',
+      receivedAt: new Date()
+    });
+
+    await pharmacyOrder.save();
+
+    // Update prescription status
+    prescription.status = 'sent-to-pharmacy';
+    prescription.sentToPharmacyAt = new Date();
+    prescription.pharmacyId = user.id;
+    await prescription.save();
+
+    res.json({
+      success: true,
+      message: 'Pharmacy order created successfully',
+      data: {
+        orderId: pharmacyOrder.orderId,
+        id: pharmacyOrder._id,
+        patientName: `${appointment.patientId.firstName} ${appointment.patientId.lastName}`,
+        doctorName: `Dr. ${appointment.doctorId.firstName} ${appointment.doctorId.lastName}`,
+        status: pharmacyOrder.status,
+        medications: pharmacyOrder.medications.length,
+        receivedAt: pharmacyOrder.receivedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Create pharmacy order error:', error);
+    res.status(500).json({
+      error: 'Failed to create pharmacy order',
+      code: 'CREATE_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Get pharmacy orders
+app.get('/api/pharmacy/orders', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user has pharmacy access
+    if (!['pharmacy', 'pharmacist', 'admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. This route is for pharmacy personnel only.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const { status, customerStatus } = req.query;
+    
+    let query = {};
+    if (status) query.status = status;
+    if (customerStatus) query.customerStatus = customerStatus;
+
+    const orders = await PharmacyOrder.find(query)
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email')
+      .populate('appointmentId', 'appointmentId scheduledAt reason')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    const formattedOrders = orders.map(order => ({
+      id: order._id,
+      orderId: order.orderId,
+      patientName: `${order.patientId.firstName} ${order.patientId.lastName}`,
+      doctorName: `Dr. ${order.doctorId.firstName} ${order.doctorId.lastName}`,
+      appointmentId: order.appointmentId?.appointmentId,
+      appointmentDate: order.appointmentId?.scheduledAt,
+      reason: order.appointmentId?.reason,
+      status: order.status,
+      customerStatus: order.customerStatus,
+      medications: order.medications.length,
+      suppliedMedications: order.getSuppliedMedications().length,
+      pendingMedications: order.getPendingMedications().length,
+      receivedAt: order.receivedAt,
+      processedAt: order.processedAt,
+      readyAt: order.readyAt,
+      dispensedAt: order.dispensedAt,
+      phone: order.patientId.phone,
+      email: order.patientId.email
+    }));
+
+    res.json({
+      success: true,
+      data: formattedOrders,
+      total: formattedOrders.length
+    });
+
+  } catch (error) {
+    console.error('Get pharmacy orders error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch pharmacy orders',
+      code: 'FETCH_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Update pharmacy order status
+app.patch('/api/pharmacy/orders/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user has pharmacy access
+    if (!['pharmacy', 'pharmacist', 'admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. This route is for pharmacy personnel only.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        error: 'Status is required',
+        code: 'MISSING_STATUS'
+      });
+    }
+
+    const order = await PharmacyOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        error: 'Pharmacy order not found',
+        code: 'ORDER_NOT_FOUND'
+      });
+    }
+
+    await order.updateStatus(status);
+    
+    if (notes) {
+      order.pharmacyNotes = notes;
+      await order.save();
+    }
+
+    res.json({
+      success: true,
+      message: 'Pharmacy order status updated successfully',
+      data: {
+        orderId: order.orderId,
+        status: order.status,
+        updatedAt: order.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Update pharmacy order status error:', error);
+    res.status(500).json({
+      error: 'Failed to update pharmacy order status',
+      code: 'UPDATE_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Supply medication
+app.patch('/api/pharmacy/orders/:id/medications/:medIndex/supply', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user has pharmacy access
+    if (!['pharmacy', 'pharmacist', 'admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. This route is for pharmacy personnel only.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const { id, medIndex } = req.params;
+    const { quantity, notes } = req.body;
+
+    const order = await PharmacyOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        error: 'Pharmacy order not found',
+        code: 'ORDER_NOT_FOUND'
+      });
+    }
+
+    const medicationIndex = parseInt(medIndex);
+    if (medicationIndex < 0 || medicationIndex >= order.medications.length) {
+      return res.status(400).json({
+        error: 'Invalid medication index',
+        code: 'INVALID_MEDICATION_INDEX'
+      });
+    }
+
+    await order.supplyMedication(medicationIndex, quantity, notes);
+
+    res.json({
+      success: true,
+      message: 'Medication supplied successfully',
+      data: {
+        orderId: order.orderId,
+        medication: order.medications[medicationIndex],
+        suppliedMedications: order.getSuppliedMedications().length,
+        pendingMedications: order.getPendingMedications().length
+      }
+    });
+
+  } catch (error) {
+    console.error('Supply medication error:', error);
+    res.status(500).json({
+      error: 'Failed to supply medication',
+      code: 'SUPPLY_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Update customer status
+app.patch('/api/pharmacy/orders/:id/customer-status', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user has pharmacy access
+    if (!['pharmacy', 'pharmacist', 'admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. This route is for pharmacy personnel only.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const { id } = req.params;
+    const { customerStatus, reason, notes } = req.body;
+
+    if (!customerStatus) {
+      return res.status(400).json({
+        error: 'Customer status is required',
+        code: 'MISSING_CUSTOMER_STATUS'
+      });
+    }
+
+    const order = await PharmacyOrder.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        error: 'Pharmacy order not found',
+        code: 'ORDER_NOT_FOUND'
+      });
+    }
+
+    await order.updateCustomerStatus(customerStatus, reason);
+    
+    if (notes) {
+      order.customerNotes = notes;
+      await order.save();
+    }
+
+    res.json({
+      success: true,
+      message: 'Customer status updated successfully',
+      data: {
+        orderId: order.orderId,
+        customerStatus: order.customerStatus,
+        updatedAt: order.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Update customer status error:', error);
+    res.status(500).json({
+      error: 'Failed to update customer status',
+      code: 'UPDATE_ERROR',
       details: error.message
     });
   }

@@ -461,6 +461,11 @@ export function PrescriptionPage() {
       const signatureData = signatureCanvas ? signatureCanvas.toDataURL('image/png') : ''
 
       const prescriptionData = {
+        // Required fields for database - ONLY ESSENTIAL
+        appointmentId: patientId,
+        patientId: patientId,
+        
+        // PDF content for generation (all the visual data)
         patientName: patient.name,
         patientAge: patient.age,
         patientGender: patient.gender,

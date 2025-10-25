@@ -175,11 +175,11 @@ export function DoctorDashboard() {
       console.log('Doctor appointments response:', response)
       
       if (response.success) {
-        // Filter for attended appointments only
-        const attendedAppointments = response.data.filter((apt: Appointment) => apt.status === 'attended')
-        setAppointments(attendedAppointments)
+        // Filter for waiting appointments only
+        const waitingAppointments = response.data.filter((apt: Appointment) => apt.status === 'waiting')
+        setAppointments(waitingAppointments)
         // Convert appointments to patient format
-        const patientsData = attendedAppointments.map((apt: Appointment) => ({
+        const patientsData = waitingAppointments.map((apt: Appointment) => ({
           id: apt.id,
           name: apt.patientName,
           time: apt.time,
@@ -415,7 +415,7 @@ export function DoctorDashboard() {
         <div className="lg:col-span-1">
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">My Appointments</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Patients Waiting for Consultation</h2>
               <span className="text-sm text-gray-500">{filteredPatients.length} appointments</span>
             </div>
 

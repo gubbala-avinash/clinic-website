@@ -40,9 +40,9 @@ const ViewPrescription: React.FC = () => {
 
     try {
       setIsLoadingPdf(true);
-      const prescriptionPath = `2025/10/prescription_${appointment.patientName.replace(/\s+/g, '_')}_${appointment.date}_${appointment.prescriptionId}.pdf`;
       
-      const blob = await pharmacyApi.getPrescriptionFile(prescriptionPath);
+      // Use the new API endpoint with prescriptionId
+      const blob = await pharmacyApi.getPrescriptionFile(appointment.prescriptionId);
       const url = URL.createObjectURL(blob);
       setPdfUrl(url);
     } catch (err) {

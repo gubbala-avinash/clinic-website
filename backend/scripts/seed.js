@@ -75,12 +75,12 @@ const seedData = async () => {
     
     // Pharmacist user
     const pharmacist = new User({
-      email: 'pharmacist@clinic.com',
-      password: await bcrypt.hash('pharmacist123', 12),
+      email: 'pharmacy@clinic.com',
+      password: await bcrypt.hash('pharmacy123', 12),
       firstName: 'Pharmacy',
       lastName: 'Manager',
       phone: '+91-9876543213',
-      role: 'pharmacist',
+      role: 'pharmacy',
       isActive: true,
       pharmacistInfo: {
         licenseNumber: 'PHM12345',
@@ -321,7 +321,7 @@ const seedData = async () => {
     console.log('Admin: admin@clinic.com / admin123');
     console.log('Doctor: dr.smith@clinic.com / doctor123');
     console.log('Receptionist: reception@clinic.com / reception123');
-    console.log('Pharmacist: pharmacist@clinic.com / pharmacist123');
+    console.log('Pharmacy: pharmacy@clinic.com / pharmacy123');
     console.log('Patient 1: rahul@example.com / patient123');
     console.log('Patient 2: priya@example.com / patient123');
     

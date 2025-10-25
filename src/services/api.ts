@@ -5,7 +5,7 @@ const API_BASE_URL = 'http://localhost:3000/api';
 export interface User {
   id: string;
   email: string;
-  role: 'admin' | 'receptionist' | 'doctor' | 'pharmacist' | 'patient';
+  role: 'admin' | 'receptionist' | 'doctor' | 'pharmacy' | 'patient';
   firstName: string;
   lastName: string;
   isActive: boolean;
@@ -240,20 +240,51 @@ export const pharmacyApi = {
   async getAppointments(): Promise<{ success: boolean; data: Appointment[]; total: number; message: string }> {
     return httpClient.get('/pharmacy/appointments');
   },
-  async getPrescriptionFile(prescriptionPath: string): Promise<Blob> {
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/prescriptions/files/${prescriptionPath}`, {
+  async getPrescriptionFile(prescriptionId: string): Promise<Blob> {
+    // Use the gateway URL for prescription PDFs
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const response = await fetch(`${apiUrl}/api/prescriptions/pdf/${prescriptionId}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
       }
     });
-    if (!response.ok) throw new Error('Failed to fetch prescription file');
+    if (!response.ok) {
+      console.error('Failed to fetch prescription file:', response.status, response.statusText);
+      throw new Error(`Failed to fetch prescription file: ${response.status} ${response.statusText}`);
+    }
     return response.blob();
+  },
+  async getPrescriptionsByPatient(patientId: string): Promise<{ success: boolean; data: any[]; total: number }> {
+    return httpClient.get(`/prescriptions/patient/${patientId}`);
+  },
+  async getPrescriptionByAppointment(appointmentId: string): Promise<{ success: boolean; data: any }> {
+    return httpClient.get(`/prescriptions/appointment/${appointmentId}`);
   },
   async getPharmacyQueue(): Promise<{ success: boolean; data: any[] }> {
     return httpClient.get('/pharmacy');
   },
   async fulfillPrescription(id: string, data: { status: string; notes?: string }): Promise<{ success: boolean; data: any }> {
     return httpClient.patch(`/pharmacy/${id}/fulfill`, data);
+  },
+  
+  // New pharmacy workflow endpoints
+  async createOrder(appointmentId: string, prescriptionId: string): Promise<{ success: boolean; data: any; message: string }> {
+    return httpClient.post('/pharmacy/orders', { appointmentId, prescriptionId });
+  },
+  async getOrders(status?: string, customerStatus?: string): Promise<{ success: boolean; data: any[]; total: number }> {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (customerStatus) params.append('customerStatus', customerStatus);
+    return httpClient.get(`/pharmacy/orders?${params.toString()}`);
+  },
+  async updateOrderStatus(orderId: string, status: string, notes?: string): Promise<{ success: boolean; data: any; message: string }> {
+    return httpClient.patch(`/pharmacy/orders/${orderId}/status`, { status, notes });
+  },
+  async supplyMedication(orderId: string, medicationIndex: number, quantity: number, notes?: string): Promise<{ success: boolean; data: any; message: string }> {
+    return httpClient.patch(`/pharmacy/orders/${orderId}/medications/${medicationIndex}/supply`, { quantity, notes });
+  },
+  async updateCustomerStatus(orderId: string, customerStatus: string, reason?: string, notes?: string): Promise<{ success: boolean; data: any; message: string }> {
+    return httpClient.patch(`/pharmacy/orders/${orderId}/customer-status`, { customerStatus, reason, notes });
   },
 };
 
