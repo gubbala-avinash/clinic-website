@@ -74,8 +74,14 @@ await connectDB();
 // Authentication middleware
 const authenticateToken = async (req, res, next) => {
   try {
+    console.log('=== CLINIC SERVICE: Authentication check ===');
+    console.log('Headers:', req.headers);
+    console.log('Authorization header:', req.headers['authorization']);
+    
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    
+    console.log('Extracted token:', token ? 'Present' : 'Missing');
 
     if (!token) {
       return res.status(401).json({
@@ -85,11 +91,14 @@ const authenticateToken = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('Token decoded successfully:', decoded);
     
     // Find user in database to get current role and details
     const user = await User.findById(decoded.userId).select('_id firstName lastName email role');
+    console.log('User found:', user);
     
     if (!user) {
+      console.log('User not found in database');
       return res.status(401).json({
         error: 'User not found',
         code: 'USER_NOT_FOUND'
@@ -104,6 +113,7 @@ const authenticateToken = async (req, res, next) => {
       role: user.role
     };
 
+    console.log('Authentication successful, proceeding to route handler');
     next();
   } catch (error) {
     console.error('Authentication error:', error);
@@ -640,6 +650,15 @@ app.patch('/api/appointments/:id/confirm', authenticateToken, async (req, res) =
 // Mark appointment as attended/not attended (Receptionist only)
 app.patch('/api/appointments/:id/attendance', authenticateToken, async (req, res) => {
   try {
+    console.log('=== CLINIC SERVICE: Mark attendance request received ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Params:', req.params);
+    console.log('Body:', req.body);
+    console.log('Headers:', req.headers);
+    console.log('User:', req.user);
+    console.log('========================================================');
+    
     const { id } = req.params;
     const { attended } = req.body;
     const user = req.user;
@@ -647,7 +666,7 @@ app.patch('/api/appointments/:id/attendance', authenticateToken, async (req, res
     // Check if user has permission to mark attendance
     if (user.role !== 'receptionist') {
       return res.status(403).json({
-        error: 'Only receptionists can mark attendance',
+        error: 'Only receptionists and admins can mark attendance',
         code: 'PERMISSION_DENIED'
       });
     }
@@ -662,7 +681,7 @@ app.patch('/api/appointments/:id/attendance', authenticateToken, async (req, res
     const appointment = await Appointment.findByIdAndUpdate(
       id,
       { 
-        status: attended ? 'attended' : 'not-attended',
+        status: attended ? 'waiting' : 'not-attended',
         attendedAt: attended ? new Date() : null,
         markedBy: user.id
       },
@@ -727,8 +746,11 @@ app.get('/api/doctor/appointments', authenticateToken, async (req, res) => {
       });
     }
     
-    // Find appointments for this specific doctor
-    const appointments = await Appointment.find({ doctorId: user.id })
+    // Find appointments for this specific doctor with 'waiting' status
+    const appointments = await Appointment.find({ 
+      doctorId: user.id,
+      status: 'waiting'
+    })
       .populate('patientId', 'firstName lastName email phone')
       .populate('doctorId', 'firstName lastName email')
       .sort({ scheduledAt: -1 })
@@ -2288,6 +2310,204 @@ app.get('/uploads/prescriptions/*', (req, res) => {
     res.status(500).json({
       error: 'Failed to serve file',
       code: 'SERVE_ERROR'
+    });
+  }
+});
+
+// Update appointment status to in-progress when doctor starts prescription
+app.patch('/api/appointments/:id/start-prescription', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    // Check if user is a doctor
+    if (user.role !== 'doctor') {
+      return res.status(403).json({
+        error: 'Only doctors can start prescriptions',
+        code: 'PERMISSION_DENIED'
+      });
+    }
+
+    const appointment = await Appointment.findByIdAndUpdate(
+      id,
+      { 
+        status: 'in-progress',
+        prescriptionStartedAt: new Date(),
+        prescriptionStartedBy: user.id
+      },
+      { new: true }
+    )
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email');
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: 'Appointment not found',
+        code: 'APPOINTMENT_NOT_FOUND'
+      });
+    }
+
+    // Check if appointment belongs to this doctor
+    if (appointment.doctorId._id.toString() !== user.id) {
+      return res.status(403).json({
+        error: 'You can only start prescriptions for your own appointments',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const patientName = appointment.patientId 
+      ? `${appointment.patientId.firstName || 'Unknown'} ${appointment.patientId.lastName || 'Patient'}`
+      : 'Unknown Patient';
+
+    res.json({
+      success: true,
+      message: 'Prescription started successfully',
+      data: {
+        id: appointment._id,
+        patientName,
+        status: appointment.status,
+        prescriptionStartedAt: appointment.prescriptionStartedAt,
+        startedBy: user.firstName + ' ' + user.lastName
+      }
+    });
+  } catch (error) {
+    console.error('Start prescription error:', error);
+    res.status(500).json({
+      error: 'Failed to start prescription',
+      code: 'START_PRESCRIPTION_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Update appointment status to completed when doctor submits prescription
+app.patch('/api/appointments/:id/complete-prescription', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { prescriptionId } = req.body;
+    const user = req.user;
+
+    // Check if user is a doctor
+    if (user.role !== 'doctor') {
+      return res.status(403).json({
+        error: 'Only doctors can complete prescriptions',
+        code: 'PERMISSION_DENIED'
+      });
+    }
+
+    const appointment = await Appointment.findByIdAndUpdate(
+      id,
+      { 
+        status: 'completed',
+        prescriptionCompletedAt: new Date(),
+        prescriptionCompletedBy: user.id,
+        prescriptionId: prescriptionId
+      },
+      { new: true }
+    )
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email');
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: 'Appointment not found',
+        code: 'APPOINTMENT_NOT_FOUND'
+      });
+    }
+
+    // Check if appointment belongs to this doctor
+    if (appointment.doctorId._id.toString() !== user.id) {
+      return res.status(403).json({
+        error: 'You can only complete prescriptions for your own appointments',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const patientName = appointment.patientId 
+      ? `${appointment.patientId.firstName || 'Unknown'} ${appointment.patientId.lastName || 'Patient'}`
+      : 'Unknown Patient';
+
+    res.json({
+      success: true,
+      message: 'Prescription completed successfully',
+      data: {
+        id: appointment._id,
+        patientName,
+        status: appointment.status,
+        prescriptionCompletedAt: appointment.prescriptionCompletedAt,
+        prescriptionId: appointment.prescriptionId,
+        completedBy: user.firstName + ' ' + user.lastName
+      }
+    });
+  } catch (error) {
+    console.error('Complete prescription error:', error);
+    res.status(500).json({
+      error: 'Failed to complete prescription',
+      code: 'COMPLETE_PRESCRIPTION_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Get appointments for pharmacy (completed appointments with prescriptions)
+app.get('/api/pharmacy/appointments', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+
+    // Check if user has pharmacy access
+    if (!['pharmacy', 'admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. This route is for pharmacy personnel only.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const appointments = await Appointment.find({ 
+      status: 'completed',
+      prescriptionId: { $exists: true }
+    })
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email')
+      .sort({ prescriptionCompletedAt: -1 })
+      .limit(100);
+
+    const formattedAppointments = appointments.map(apt => {
+      const patientName = apt.patientId 
+        ? `${apt.patientId.firstName || 'Unknown'} ${apt.patientId.lastName || 'Patient'}`
+        : 'Unknown Patient';
+      
+      const doctorName = apt.doctorId 
+        ? `Dr. ${apt.doctorId.firstName || 'Unknown'} ${apt.doctorId.lastName || 'Doctor'}`
+        : 'Unknown Doctor';
+
+      return {
+        id: apt._id,
+        patientName,
+        doctorName,
+        date: apt.scheduledAt.toISOString().split('T')[0],
+        time: apt.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+        status: apt.status,
+        reason: apt.reason || 'No reason provided',
+        phone: apt.patientId?.phone || 'N/A',
+        email: apt.patientId?.email || 'N/A',
+        prescriptionId: apt.prescriptionId,
+        prescriptionCompletedAt: apt.prescriptionCompletedAt,
+        completedBy: apt.prescriptionCompletedBy
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: formattedAppointments,
+      total: formattedAppointments.length,
+      message: `Found ${formattedAppointments.length} completed appointments with prescriptions`
+    });
+  } catch (error) {
+    console.error('Get pharmacy appointments error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch pharmacy appointments',
+      code: 'FETCH_ERROR',
+      details: error.message
     });
   }
 });

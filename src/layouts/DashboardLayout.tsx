@@ -13,7 +13,8 @@ import {
   LogOut,
   User,
   ChevronDown,
-  Server
+  Server,
+  Calendar
 } from 'lucide-react'
 import { useAuth } from '../hooks/useApi'
 import { useState } from 'react'
@@ -26,10 +27,11 @@ export function DashboardLayout() {
   const navigation = [
     { name: 'Dashboard', href: '/admin', icon: Home, roles: ['admin', 'receptionist'] },
     { name: 'Patients', href: '/admin/patients', icon: Users, roles: ['admin', 'receptionist'] },
+    { name: 'Appointment History', href: '/receptionist/history', icon: Calendar, roles: ['admin', 'receptionist'] },
     { name: 'User Management', href: '/admin/users', icon: User, roles: ['admin'] },
     { name: 'Settings', href: '/admin/settings', icon: Settings, roles: ['admin'] },
     { name: 'Doctor Panel', href: '/doctor', icon: Stethoscope, roles: ['doctor'] },
-    { name: 'Pharmacy', href: '/pharmacy', icon: Pill, roles: ['pharmacist'] },
+    { name: 'Pharmacy', href: '/pharmacy', icon: Pill, roles: ['pharmacy', 'admin'] },
     { name: 'Analytics', href: '/analytics', icon: BarChart3, roles: ['admin'] },
     { name: 'Audit Logs', href: '/audit', icon: FileText, roles: ['admin'] },
     { name: 'Server Status', href: '/status', icon: Server, roles: ['admin'] },

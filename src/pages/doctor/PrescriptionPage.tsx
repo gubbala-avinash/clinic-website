@@ -152,6 +152,15 @@ export function PrescriptionPage() {
           
           setPatient(patientData)
           success('Patient Data Loaded', `Loaded data for ${appointment.patientName}`)
+          
+          // Start prescription process - update appointment status to in-progress
+          try {
+            await doctorApi.startPrescription(patientId)
+            console.log('Prescription started for appointment:', patientId)
+          } catch (error) {
+            console.error('Failed to start prescription:', error)
+            // Don't show error to user as this is background operation
+          }
         } else {
           error('Patient Not Found', 'Could not find patient with this ID')
         }
@@ -492,6 +501,17 @@ export function PrescriptionPage() {
       if (response.ok) {
         const result = await response.json()
         success('PDF Saved', `Prescription PDF has been saved successfully. File: ${result.fileName}`)
+        
+        // Complete prescription process - update appointment status to completed
+        try {
+          await doctorApi.completePrescription(patientId, result.prescriptionId || prescription.id)
+          console.log('Prescription completed for appointment:', patientId)
+          success('Prescription Completed', 'Appointment has been marked as completed and sent to pharmacy')
+        } catch (error) {
+          console.error('Failed to complete prescription:', error)
+          // Show warning but don't fail the whole process
+          error('Status Update Failed', 'PDF saved but failed to update appointment status')
+        }
       } else {
         const errorData = await response.json()
         error('PDF Save Failed', errorData.error || 'Failed to save PDF')

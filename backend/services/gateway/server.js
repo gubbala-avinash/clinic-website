@@ -335,6 +335,16 @@ const clinicProxy = createProxyMiddleware({
   onProxyReq: (proxyReq, req, res) => {
     console.log('Gateway: Forwarding request to clinic service:', req.method, req.url);
     console.log('Gateway: Target URL:', SERVICES.clinic.url);
+    console.log('Gateway: Request headers:', req.headers);
+    console.log('Gateway: Request body:', req.body);
+    
+    // Ensure the request body is properly forwarded
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log('Gateway: Received response from clinic service:', proxyRes.statusCode);

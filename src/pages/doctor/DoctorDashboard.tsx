@@ -175,9 +175,11 @@ export function DoctorDashboard() {
       console.log('Doctor appointments response:', response)
       
       if (response.success) {
-        setAppointments(response.data)
+        // Filter for attended appointments only
+        const attendedAppointments = response.data.filter((apt: Appointment) => apt.status === 'attended')
+        setAppointments(attendedAppointments)
         // Convert appointments to patient format
-        const patientsData = response.data.map((apt: Appointment) => ({
+        const patientsData = attendedAppointments.map((apt: Appointment) => ({
           id: apt.id,
           name: apt.patientName,
           time: apt.time,
@@ -187,14 +189,12 @@ export function DoctorDashboard() {
           phone: apt.phone || '',
           email: apt.email || '',
           medicalHistory: [], // Will be populated from patient data
-          status: apt.status === 'scheduled' ? 'waiting' : 
-                 apt.status === 'confirmed' ? 'in-progress' : 
-                 apt.status === 'completed' ? 'completed' : 'waiting',
+          status: 'waiting', // All attended patients are waiting for consultation
           priority: 'medium' as const,
           vitalSigns: undefined
         }))
         setPatients(patientsData)
-        success('My Appointments Loaded', `Found ${response.total} appointments for you`)
+        success('Attended Patients Loaded', `Found ${attendedAppointments.length} patients waiting for consultation`)
       } else {
         showError('Failed to load appointments', 'Please try again later')
       }

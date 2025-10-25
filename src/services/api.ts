@@ -38,10 +38,15 @@ export interface Appointment {
   doctorName: string;
   date: string;
   time: string;
-  status: 'scheduled' | 'confirmed' | 'attended' | 'not-attended' | 'checked-in' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'confirmed' | 'attended' | 'not-attended' | 'checked-in' | 'completed' | 'cancelled' | 'in-progress';
   reason: string;
   phone: string;
   email: string;
+  prescriptionId?: string;
+  prescriptionCompletedAt?: string;
+  completedBy?: string;
+  confirmedAt?: string;
+  attendedAt?: string;
 }
 
 export interface Prescription {
@@ -223,6 +228,33 @@ export const doctorApi = {
   async getMyAppointments(): Promise<{ success: boolean; data: Appointment[]; total: number; message: string }> {
     return httpClient.get('/doctor/appointments');
   },
+  async startPrescription(appointmentId: string): Promise<{ success: boolean; data: any; message: string }> {
+    return httpClient.patch(`/appointments/${appointmentId}/start-prescription`);
+  },
+  async completePrescription(appointmentId: string, prescriptionId: string): Promise<{ success: boolean; data: any; message: string }> {
+    return httpClient.patch(`/appointments/${appointmentId}/complete-prescription`, { prescriptionId });
+  },
+};
+
+export const pharmacyApi = {
+  async getAppointments(): Promise<{ success: boolean; data: Appointment[]; total: number; message: string }> {
+    return httpClient.get('/pharmacy/appointments');
+  },
+  async getPrescriptionFile(prescriptionPath: string): Promise<Blob> {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/prescriptions/files/${prescriptionPath}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      }
+    });
+    if (!response.ok) throw new Error('Failed to fetch prescription file');
+    return response.blob();
+  },
+  async getPharmacyQueue(): Promise<{ success: boolean; data: any[] }> {
+    return httpClient.get('/pharmacy');
+  },
+  async fulfillPrescription(id: string, data: { status: string; notes?: string }): Promise<{ success: boolean; data: any }> {
+    return httpClient.patch(`/pharmacy/${id}/fulfill`, data);
+  },
 };
 
 // Public API for booking (no authentication required)
@@ -258,16 +290,6 @@ export const prescriptionsApi = {
 
   async updatePrescription(id: string, updates: Partial<Prescription>): Promise<{ success: boolean; data: Prescription }> {
     return httpClient.patch(`/prescriptions/${id}`, updates);
-  },
-};
-
-export const pharmacyApi = {
-  async getPharmacyQueue(): Promise<{ success: boolean; data: any[] }> {
-    return httpClient.get('/pharmacy');
-  },
-
-  async fulfillPrescription(id: string, data: { status: string; notes?: string }): Promise<{ success: boolean; data: any }> {
-    return httpClient.patch(`/pharmacy/${id}/fulfill`, data);
   },
 };
 

@@ -138,7 +138,7 @@ export function AdminDashboard() {
         const response = await appointmentsApi.markAttendance(appointment.id, attended)
         if (response.success) {
           setAppointments(prev => prev.map(apt => 
-            apt.id === appointment.id ? { ...apt, status: attended ? 'attended' : 'not-attended' } : apt
+            apt.id === appointment.id ? { ...apt, status: attended ? 'waiting' : 'not-attended' } : apt
           ))
           success(
             `Appointment ${attended ? 'Attended' : 'Not Attended'}`, 
@@ -231,6 +231,7 @@ export function AdminDashboard() {
     switch (status) {
       case 'scheduled': return <Clock className="w-4 h-4" />
       case 'confirmed': return <CheckCircle className="w-4 h-4" />
+      case 'waiting': return <Clock className="w-4 h-4" />
       case 'attended': return <CheckCircle className="w-4 h-4" />
       case 'not-attended': return <XCircle className="w-4 h-4" />
       case 'completed': return <CheckCircle className="w-4 h-4" />
@@ -239,10 +240,24 @@ export function AdminDashboard() {
     }
   }
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'scheduled': return 'Scheduled'
+      case 'confirmed': return 'Confirmed'
+      case 'waiting': return 'Waiting for Doctor'
+      case 'attended': return 'Attended'
+      case 'not-attended': return 'Not Attended'
+      case 'cancelled': return 'Cancelled'
+      case 'completed': return 'Completed'
+      default: return status
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled': return 'bg-blue-100 text-blue-800'
       case 'confirmed': return 'bg-yellow-100 text-yellow-800'
+      case 'waiting': return 'bg-purple-100 text-purple-800'
       case 'attended': return 'bg-emerald-100 text-emerald-800'
       case 'not-attended': return 'bg-orange-100 text-orange-800'
       case 'completed': return 'bg-green-100 text-green-800'
@@ -262,6 +277,7 @@ export function AdminDashboard() {
     total: appointments.length,
     scheduled: appointments.filter(a => a.status === 'scheduled').length,
     confirmed: appointments.filter(a => a.status === 'confirmed').length,
+    waiting: appointments.filter(a => a.status === 'waiting').length,
     attended: appointments.filter(a => a.status === 'attended').length,
     notAttended: appointments.filter(a => a.status === 'not-attended').length,
     completed: appointments.filter(a => a.status === 'completed').length,
@@ -334,6 +350,17 @@ export function AdminDashboard() {
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-yellow-600" />
+            </div>
+          </div>
+        </div>
+        <div className="card p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Waiting for Doctor</p>
+              <p className="text-2xl font-bold text-purple-600">{stats.waiting}</p>
+            </div>
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-6 h-6 text-purple-600" />
             </div>
           </div>
         </div>
@@ -424,6 +451,8 @@ export function AdminDashboard() {
               <option value="all">All Status</option>
               <option value="scheduled">Scheduled</option>
               <option value="confirmed">Confirmed</option>
+              <option value="waiting">Waiting for Doctor</option>
+              <option value="attended">Attended</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
@@ -459,7 +488,7 @@ export function AdminDashboard() {
                       <h3 className="text-lg font-semibold text-gray-900">{appointment.patientName}</h3>
                       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
                         {getStatusIcon(appointment.status)}
-                        {appointment.status.replace('-', ' ')}
+                        {getStatusText(appointment.status)}
                       </span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
@@ -509,7 +538,7 @@ export function AdminDashboard() {
                     )}
                     
                     {/* Reschedule button - for scheduled and confirmed appointments */}
-                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed' || appointment.status === 'waiting') && (
                       <button 
                         onClick={() => handleReschedule(appointment)}
                         className="btn-secondary text-sm"
@@ -519,7 +548,7 @@ export function AdminDashboard() {
                     )}
                     
                     {/* Cancel button - for scheduled and confirmed appointments */}
-                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed' || appointment.status === 'waiting') && (
                       <button 
                         onClick={() => handleCancel(appointment)}
                         className="btn-secondary text-sm text-red-600 hover:text-red-700"
