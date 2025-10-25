@@ -22,7 +22,19 @@ import { useAuth } from './hooks/useApi'
 const queryClient = new QueryClient()
 
 function RoleRoute({ children, allow }: { children: React.ReactNode; allow: Array<'admin' | 'receptionist' | 'doctor' | 'pharmacist' | 'patient'> }) {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, isLoading } = useAuth()
+  
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center space-x-2">
+          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <span>Loading...</span>
+        </div>
+      </div>
+    )
+  }
   
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />

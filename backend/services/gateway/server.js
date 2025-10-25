@@ -188,7 +188,8 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({
       success: true,
       message: 'Login successful',
-      user: userResponse
+      user: userResponse,
+      token: token
     });
     
   } catch (error) {
@@ -267,7 +268,8 @@ app.post('/api/auth/register', async (req, res) => {
         role: user.role,
         firstName: user.firstName,
         lastName: user.lastName
-      }
+      },
+      token: token
     });
     
   } catch (error) {
@@ -291,6 +293,7 @@ app.post('/api/auth/logout', (req, res) => {
 // Get current user
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
+    console.log('Auth/me called, user:', req.user);
     const user = await User.findById(req.user.userId).select('-password');
     if (!user) {
       return res.status(404).json({ 
@@ -301,7 +304,14 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     
     res.json({
       success: true,
-      user
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        isActive: user.isActive
+      }
     });
   } catch (error) {
     console.error('Get user error:', error);

@@ -24,9 +24,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
+      console.log('Attempting login with credentials:', credentials.email)
       const response = await authApi.login(credentials)
+      console.log('Login response:', response)
       
       if (response.success) {
+        // Store token in localStorage
+        if (response.token) {
+          console.log('Storing token in localStorage')
+          localStorage.setItem('authToken', response.token)
+        } else {
+          console.log('No token in response!')
+        }
+        
+        console.log('Setting authenticated user:', response.user)
         set({ 
           user: response.user, 
           isAuthenticated: true, 
@@ -34,12 +45,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           error: null 
         })
       } else {
+        console.log('Login failed:', response)
         set({ 
           error: 'Login failed', 
           isLoading: false 
         })
       }
     } catch (error) {
+      console.log('Login error:', error)
       if (error instanceof ApiError) {
         set({ 
           error: error.message, 
@@ -62,6 +75,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
+      // Clear token from localStorage
+      localStorage.removeItem('authToken')
+      
       set({ 
         user: null, 
         isAuthenticated: false, 
@@ -74,10 +90,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   checkAuth: async () => {
     set({ isLoading: true })
     
+    // Check if token exists in localStorage
+    const token = localStorage.getItem('authToken')
+    console.log('Checking auth, token exists:', !!token)
+    
+    if (!token) {
+      console.log('No token found, setting unauthenticated')
+      set({ 
+        user: null, 
+        isAuthenticated: false, 
+        isLoading: false,
+        error: null 
+      })
+      return
+    }
+    
     try {
+      console.log('Making API call to check current user')
       const response = await authApi.getCurrentUser()
+      console.log('Auth check response:', response)
       
       if (response.success) {
+        console.log('Auth successful, setting user:', response.user)
         set({ 
           user: response.user, 
           isAuthenticated: true, 
@@ -85,6 +119,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           error: null 
         })
       } else {
+        console.log('Auth failed, clearing token')
+        // Token is invalid, clear it
+        localStorage.removeItem('authToken')
         set({ 
           user: null, 
           isAuthenticated: false, 
@@ -93,6 +130,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         })
       }
     } catch (error) {
+      console.log('Auth check error:', error)
+      // Token is invalid, clear it
+      localStorage.removeItem('authToken')
       set({ 
         user: null, 
         isAuthenticated: false, 

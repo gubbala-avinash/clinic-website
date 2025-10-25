@@ -20,6 +20,7 @@ export interface LoginResponse {
   success: boolean;
   message: string;
   user: User;
+  token: string;
 }
 
 export interface RegisterRequest {
@@ -37,7 +38,7 @@ export interface Appointment {
   doctorName: string;
   date: string;
   time: string;
-  status: 'scheduled' | 'confirmed' | 'checked-in' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'confirmed' | 'attended' | 'not-attended' | 'checked-in' | 'completed' | 'cancelled';
   reason: string;
   phone: string;
   email: string;
@@ -206,6 +207,14 @@ export const appointmentsApi = {
 
   async cancelAppointment(id: string): Promise<{ success: boolean; message: string; data: Appointment }> {
     return httpClient.patch(`/appointments/${id}`, { status: 'cancelled' });
+  },
+
+  async confirmAppointment(id: string): Promise<{ success: boolean; message: string; data: Appointment }> {
+    return httpClient.patch(`/appointments/${id}/confirm`);
+  },
+
+  async markAttendance(id: string, attended: boolean): Promise<{ success: boolean; message: string; data: Appointment }> {
+    return httpClient.patch(`/appointments/${id}/attendance`, { attended });
   },
 };
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { 
   Calendar, 
-  Users, 
   Clock, 
   Search, 
   Plus, 
@@ -14,7 +13,7 @@ import {
   FileText,
   Loader2
 } from 'lucide-react'
-import { appointmentsApi, doctorsApi, adminApi, publicBookingApi, type Appointment, type Doctor } from '../../services/api'
+import { appointmentsApi, doctorsApi, publicBookingApi, type Appointment, type Doctor } from '../../services/api'
 import { useToast, ToastContainer } from '../../components/ui/Toast'
 
 export function AdminDashboard() {
@@ -23,7 +22,6 @@ export function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const { toasts, success, error, removeToast } = useToast()
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false)
-  const [apiError, setApiError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [showCreateBookingModal, setShowCreateBookingModal] = useState(false)
@@ -52,7 +50,6 @@ export function AdminDashboard() {
   const loadAppointments = async () => {
     try {
       setIsLoading(true)
-      setApiError(null)
       const response = await appointmentsApi.getAppointments()
       
       if (response.success) {
@@ -111,6 +108,48 @@ export function AdminDashboard() {
       } catch (err) {
         error('Failed to cancel appointment', 'Please check your connection')
         console.error('Error cancelling appointment:', err)
+      }
+    }
+  }
+
+  const handleConfirm = async (appointment: Appointment) => {
+    if (window.confirm(`Confirm ${appointment.patientName}'s appointment?`)) {
+      try {
+        const response = await appointmentsApi.confirmAppointment(appointment.id)
+        if (response.success) {
+          setAppointments(prev => prev.map(apt => 
+            apt.id === appointment.id ? { ...apt, status: 'confirmed' } : apt
+          ))
+          success('Appointment Confirmed', `${appointment.patientName}'s appointment has been confirmed`)
+        } else {
+          error('Failed to confirm appointment', 'Please try again')
+        }
+      } catch (err) {
+        error('Failed to confirm appointment', 'Please check your connection')
+        console.error('Error confirming appointment:', err)
+      }
+    }
+  }
+
+  const handleMarkAttendance = async (appointment: Appointment, attended: boolean) => {
+    const action = attended ? 'mark as attended' : 'mark as not attended'
+    if (window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ${appointment.patientName}'s appointment?`)) {
+      try {
+        const response = await appointmentsApi.markAttendance(appointment.id, attended)
+        if (response.success) {
+          setAppointments(prev => prev.map(apt => 
+            apt.id === appointment.id ? { ...apt, status: attended ? 'attended' : 'not-attended' } : apt
+          ))
+          success(
+            `Appointment ${attended ? 'Attended' : 'Not Attended'}`, 
+            `${appointment.patientName}'s appointment has been marked as ${attended ? 'attended' : 'not attended'}`
+          )
+        } else {
+          error('Failed to mark attendance', 'Please try again')
+        }
+      } catch (err) {
+        error('Failed to mark attendance', 'Please check your connection')
+        console.error('Error marking attendance:', err)
       }
     }
   }
@@ -191,7 +230,9 @@ export function AdminDashboard() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'scheduled': return <Clock className="w-4 h-4" />
-      case 'confirmed': return <User className="w-4 h-4" />
+      case 'confirmed': return <CheckCircle className="w-4 h-4" />
+      case 'attended': return <CheckCircle className="w-4 h-4" />
+      case 'not-attended': return <XCircle className="w-4 h-4" />
       case 'completed': return <CheckCircle className="w-4 h-4" />
       case 'cancelled': return <XCircle className="w-4 h-4" />
       default: return <AlertCircle className="w-4 h-4" />
@@ -202,6 +243,8 @@ export function AdminDashboard() {
     switch (status) {
       case 'scheduled': return 'bg-blue-100 text-blue-800'
       case 'confirmed': return 'bg-yellow-100 text-yellow-800'
+      case 'attended': return 'bg-emerald-100 text-emerald-800'
+      case 'not-attended': return 'bg-orange-100 text-orange-800'
       case 'completed': return 'bg-green-100 text-green-800'
       case 'cancelled': return 'bg-red-100 text-red-800'
       default: return 'bg-gray-100 text-gray-800'
@@ -219,6 +262,8 @@ export function AdminDashboard() {
     total: appointments.length,
     scheduled: appointments.filter(a => a.status === 'scheduled').length,
     confirmed: appointments.filter(a => a.status === 'confirmed').length,
+    attended: appointments.filter(a => a.status === 'attended').length,
+    notAttended: appointments.filter(a => a.status === 'not-attended').length,
     completed: appointments.filter(a => a.status === 'completed').length,
   }
 
@@ -288,7 +333,29 @@ export function AdminDashboard() {
               <p className="text-2xl font-bold text-yellow-600">{stats.confirmed}</p>
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <User className="w-6 h-6 text-yellow-600" />
+              <CheckCircle className="w-6 h-6 text-yellow-600" />
+            </div>
+          </div>
+        </div>
+        <div className="card p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Attended</p>
+              <p className="text-2xl font-bold text-emerald-600">{stats.attended}</p>
+            </div>
+            <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-emerald-600" />
+            </div>
+          </div>
+        </div>
+        <div className="card p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Not Attended</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.notAttended}</p>
+            </div>
+            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+              <XCircle className="w-6 h-6 text-orange-600" />
             </div>
           </div>
         </div>
@@ -409,19 +476,58 @@ export function AdminDashboard() {
                       <strong>Reason:</strong> {appointment.reason}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleReschedule(appointment)}
-                      className="btn-secondary text-sm"
-                    >
-                      Reschedule
-                    </button>
-                    <button 
-                      onClick={() => handleCancel(appointment)}
-                      className="btn-secondary text-sm text-red-600 hover:text-red-700"
-                    >
-                      Cancel
-                    </button>
+                  <div className="flex flex-wrap gap-2">
+                    {/* Confirm button - for scheduled appointments */}
+                    {appointment.status === 'scheduled' && (
+                      <button 
+                        onClick={() => handleConfirm(appointment)}
+                        className="btn-primary text-sm"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        Confirm
+                      </button>
+                    )}
+                    
+                    {/* Attendance buttons - for confirmed appointments */}
+                    {appointment.status === 'confirmed' && (
+                      <>
+                        <button 
+                          onClick={() => handleMarkAttendance(appointment, true)}
+                          className="btn-secondary text-sm text-green-600 hover:text-green-700"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Attended
+                        </button>
+                        <button 
+                          onClick={() => handleMarkAttendance(appointment, false)}
+                          className="btn-secondary text-sm text-orange-600 hover:text-orange-700"
+                        >
+                          <XCircle className="w-4 h-4 mr-1" />
+                          Not Attended
+                        </button>
+                      </>
+                    )}
+                    
+                    {/* Reschedule button - for scheduled and confirmed appointments */}
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                      <button 
+                        onClick={() => handleReschedule(appointment)}
+                        className="btn-secondary text-sm"
+                      >
+                        Reschedule
+                      </button>
+                    )}
+                    
+                    {/* Cancel button - for scheduled and confirmed appointments */}
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                      <button 
+                        onClick={() => handleCancel(appointment)}
+                        className="btn-secondary text-sm text-red-600 hover:text-red-700"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    
                     <button className="p-2 text-gray-400 hover:text-gray-600">
                       <MoreVertical className="w-4 h-4" />
                     </button>
@@ -487,18 +593,18 @@ export function AdminDashboard() {
                   <span className="text-gray-600">Loading doctors...</span>
                 </div>
               ) : (
-                <select 
-                  className="form-input" 
-                  value={newBooking.doctorId} 
-                  onChange={(e)=>setNewBooking(prev => ({ ...prev, doctorId: e.target.value }))}
-                >
-                  <option value="">Select Doctor</option>
+              <select 
+                className="form-input" 
+                value={newBooking.doctorId} 
+                onChange={(e)=>setNewBooking(prev => ({ ...prev, doctorId: e.target.value }))}
+              >
+                <option value="">Select Doctor</option>
                   {doctors.map(doctor => (
                     <option key={doctor.id} value={doctor.id}>
                       {doctor.name} - {doctor.specialty}
                     </option>
                   ))}
-                </select>
+              </select>
               )}
             </div>
             <div>

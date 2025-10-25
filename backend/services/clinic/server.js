@@ -13,6 +13,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import puppeteer from 'puppeteer';
+import jwt from 'jsonwebtoken';
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -60,6 +61,53 @@ if (process.env.NODE_ENV === 'development') {
 // ===========================================
 
 await connectDB();
+
+// ===========================================
+// AUTHENTICATION MIDDLEWARE
+// ===========================================
+
+// Authentication middleware
+const authenticateToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+    if (!token) {
+      return res.status(401).json({
+        error: 'Access token required',
+        code: 'TOKEN_REQUIRED'
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Find user in database to get current role and details
+    const user = await User.findById(decoded.userId).select('_id firstName lastName email role');
+    
+    if (!user) {
+      return res.status(401).json({
+        error: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    req.user = {
+      id: user._id.toString(),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role
+    };
+
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    return res.status(403).json({
+      error: 'Invalid or expired token',
+      code: 'INVALID_TOKEN'
+    });
+  }
+};
 
 // ===========================================
 // APPOINTMENT ROUTES
@@ -511,6 +559,152 @@ app.get('/api/appointments/cleanup', async (req, res) => {
     res.status(500).json({
       error: 'Failed to cleanup appointments',
       code: 'CLEANUP_ERROR'
+    });
+  }
+});
+
+// Confirm appointment (Admin/Receptionist)
+app.patch('/api/appointments/:id/confirm', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    // Check if user has permission to confirm appointments
+    if (!['admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Insufficient permissions. Only admin and receptionist can confirm appointments.',
+        code: 'PERMISSION_DENIED'
+      });
+    }
+
+    const appointment = await Appointment.findByIdAndUpdate(
+      id,
+      { 
+        status: 'confirmed',
+        confirmedAt: new Date(),
+        confirmedBy: user.id
+      },
+      { new: true }
+    )
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email');
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: 'Appointment not found',
+        code: 'APPOINTMENT_NOT_FOUND'
+      });
+    }
+
+    // Handle null references safely
+    const patientName = appointment.patientId 
+      ? `${appointment.patientId.firstName || 'Unknown'} ${appointment.patientId.lastName || 'Patient'}`
+      : 'Unknown Patient';
+    
+    const doctorName = appointment.doctorId 
+      ? `Dr. ${appointment.doctorId.firstName || 'Unknown'} ${appointment.doctorId.lastName || 'Doctor'}`
+      : 'Unknown Doctor';
+
+    res.json({
+      success: true,
+      message: 'Appointment confirmed successfully',
+      data: {
+        id: appointment._id,
+        patientName,
+        doctorName,
+        date: appointment.scheduledAt.toISOString().split('T')[0],
+        time: appointment.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+        status: appointment.status,
+        reason: appointment.reason || 'No reason provided',
+        phone: appointment.patientId?.phone || 'N/A',
+        email: appointment.patientId?.email || 'N/A',
+        confirmedAt: appointment.confirmedAt,
+        confirmedBy: user.firstName + ' ' + user.lastName
+      }
+    });
+  } catch (error) {
+    console.error('Confirm appointment error:', error);
+    res.status(500).json({
+      error: 'Failed to confirm appointment',
+      code: 'CONFIRM_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Mark appointment as attended/not attended (Receptionist only)
+app.patch('/api/appointments/:id/attendance', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { attended } = req.body;
+    const user = req.user;
+
+    // Check if user has permission to mark attendance
+    if (user.role !== 'receptionist') {
+      return res.status(403).json({
+        error: 'Only receptionists can mark attendance',
+        code: 'PERMISSION_DENIED'
+      });
+    }
+
+    if (typeof attended !== 'boolean') {
+      return res.status(400).json({
+        error: 'attended field must be a boolean',
+        code: 'INVALID_DATA'
+      });
+    }
+
+    const appointment = await Appointment.findByIdAndUpdate(
+      id,
+      { 
+        status: attended ? 'attended' : 'not-attended',
+        attendedAt: attended ? new Date() : null,
+        markedBy: user.id
+      },
+      { new: true }
+    )
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email');
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: 'Appointment not found',
+        code: 'APPOINTMENT_NOT_FOUND'
+      });
+    }
+
+    // Handle null references safely
+    const patientName = appointment.patientId 
+      ? `${appointment.patientId.firstName || 'Unknown'} ${appointment.patientId.lastName || 'Patient'}`
+      : 'Unknown Patient';
+    
+    const doctorName = appointment.doctorId 
+      ? `Dr. ${appointment.doctorId.firstName || 'Unknown'} ${appointment.doctorId.lastName || 'Doctor'}`
+      : 'Unknown Doctor';
+
+    res.json({
+      success: true,
+      message: `Appointment marked as ${attended ? 'attended' : 'not attended'}`,
+      data: {
+        id: appointment._id,
+        patientName,
+        doctorName,
+        date: appointment.scheduledAt.toISOString().split('T')[0],
+        time: appointment.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+        status: appointment.status,
+        reason: appointment.reason || 'No reason provided',
+        phone: appointment.patientId?.phone || 'N/A',
+        email: appointment.patientId?.email || 'N/A',
+        attendedAt: appointment.attendedAt,
+        markedBy: user.firstName + ' ' + user.lastName
+      }
+    });
+  } catch (error) {
+    console.error('Mark attendance error:', error);
+    res.status(500).json({
+      error: 'Failed to mark attendance',
+      code: 'ATTENDANCE_ERROR',
+      details: error.message
     });
   }
 });
