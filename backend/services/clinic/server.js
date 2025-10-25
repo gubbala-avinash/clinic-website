@@ -709,6 +709,79 @@ app.patch('/api/appointments/:id/attendance', authenticateToken, async (req, res
   }
 });
 
+// Get doctor's appointments (Doctor only)
+app.get('/api/doctor/appointments', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Ensure only doctors can access this route
+    if (user.role !== 'doctor') {
+      return res.status(403).json({
+        error: 'Access denied. This route is for doctors only.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+    
+    // Find appointments for this specific doctor
+    const appointments = await Appointment.find({ doctorId: user.id })
+      .populate('patientId', 'firstName lastName email phone')
+      .populate('doctorId', 'firstName lastName email')
+      .sort({ scheduledAt: -1 })
+      .limit(100);
+    
+    const formattedAppointments = appointments.map(apt => {
+      // Handle null patientId or doctorId
+      const patientName = apt.patientId 
+        ? `${apt.patientId.firstName || 'Unknown'} ${apt.patientId.lastName || 'Patient'}`
+        : 'Unknown Patient';
+      
+      const doctorName = apt.doctorId 
+        ? `Dr. ${apt.doctorId.firstName || 'Unknown'} ${apt.doctorId.lastName || 'Doctor'}`
+        : 'Unknown Doctor';
+      
+      const phone = apt.patientId?.phone || 'N/A';
+      const email = apt.patientId?.email || 'N/A';
+      
+      // Log data quality issues for debugging
+      if (!apt.patientId) {
+        console.warn(`Appointment ${apt._id} has null patientId`);
+      }
+      if (!apt.doctorId) {
+        console.warn(`Appointment ${apt._id} has null doctorId`);
+      }
+      
+      return {
+        id: apt._id,
+        patientName,
+        doctorName,
+        date: apt.scheduledAt.toISOString().split('T')[0],
+        time: apt.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+        status: apt.status,
+        reason: apt.reason || 'No reason provided',
+        phone,
+        email,
+        confirmedAt: apt.confirmedAt,
+        attendedAt: apt.attendedAt
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: formattedAppointments,
+      total: formattedAppointments.length,
+      doctorId: user.id,
+      message: `Found ${formattedAppointments.length} appointments for Dr. ${user.firstName || 'Unknown'}`
+    });
+  } catch (error) {
+    console.error('Get doctor appointments error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch doctor appointments',
+      code: 'FETCH_ERROR',
+      details: error.message
+    });
+  }
+});
+
 // ===========================================
 // PRESCRIPTION ROUTES
 // ===========================================

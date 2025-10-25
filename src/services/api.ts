@@ -218,6 +218,13 @@ export const appointmentsApi = {
   },
 };
 
+// Doctor API for doctor-specific operations
+export const doctorApi = {
+  async getMyAppointments(): Promise<{ success: boolean; data: Appointment[]; total: number; message: string }> {
+    return httpClient.get('/doctor/appointments');
+  },
+};
+
 // Public API for booking (no authentication required)
 export const publicBookingApi = {
   async createAppointment(appointmentData: {

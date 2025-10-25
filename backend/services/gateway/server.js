@@ -807,6 +807,7 @@ app.post('/api/admin/receptionists', async (req, res) => {
 
 // Protected routes (authentication required)
 app.use('/api/appointments', authenticateToken, clinicProxy);
+app.use('/api/doctor', authenticateToken, clinicProxy);
 app.use('/api/prescriptions', authenticateToken, clinicProxy);
 app.use('/api/pharmacy', authenticateToken, clinicProxy);
 app.use('/api/analytics', authenticateToken, clinicProxy);
