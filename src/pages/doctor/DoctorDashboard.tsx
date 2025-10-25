@@ -39,7 +39,7 @@ import {
 } from 'lucide-react'
 import { RichText } from '../../components/editor/RichText'
 import { Link } from 'react-router-dom'
-import { appointmentsApi, prescriptionsApi, type Appointment, type Prescription } from '../../services/api'
+import { doctorApi, prescriptionsApi, type Appointment, type Prescription } from '../../services/api'
 import { useToast, ToastContainer } from '../../components/ui/Toast'
 
 type Patient = { 
@@ -170,12 +170,16 @@ export function DoctorDashboard() {
   const loadAppointments = async () => {
     try {
       setIsLoading(true)
-      const response = await appointmentsApi.getAppointments()
+      console.log('Loading doctor appointments...')
+      const response = await doctorApi.getMyAppointments()
+      console.log('Doctor appointments response:', response)
       
       if (response.success) {
-        setAppointments(response.data)
+        // Filter for waiting appointments only
+        const waitingAppointments = response.data.filter((apt: Appointment) => apt.status === 'waiting')
+        setAppointments(waitingAppointments)
         // Convert appointments to patient format
-        const patientsData = response.data.map((apt: Appointment) => ({
+        const patientsData = waitingAppointments.map((apt: Appointment) => ({
           id: apt.id,
           name: apt.patientName,
           time: apt.time,
@@ -185,20 +189,18 @@ export function DoctorDashboard() {
           phone: apt.phone || '',
           email: apt.email || '',
           medicalHistory: [], // Will be populated from patient data
-          status: apt.status === 'scheduled' ? 'waiting' : 
-                 apt.status === 'confirmed' ? 'in-progress' : 
-                 apt.status === 'completed' ? 'completed' : 'waiting',
+          status: 'waiting', // All attended patients are waiting for consultation
           priority: 'medium' as const,
           vitalSigns: undefined
         }))
         setPatients(patientsData)
-        success('Appointments Loaded', 'Today\'s appointments loaded successfully')
+        success('Attended Patients Loaded', `Found ${attendedAppointments.length} patients waiting for consultation`)
       } else {
         showError('Failed to load appointments', 'Please try again later')
       }
     } catch (err) {
       showError('Failed to load appointments', 'Please check your connection')
-      console.error('Error loading appointments:', err)
+      console.error('Error loading doctor appointments:', err)
     } finally {
       setIsLoading(false)
     }
@@ -413,8 +415,8 @@ export function DoctorDashboard() {
         <div className="lg:col-span-1">
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Today's Patients</h2>
-              <span className="text-sm text-gray-500">{filteredPatients.length} patients</span>
+              <h2 className="text-lg font-semibold text-gray-900">Patients Waiting for Consultation</h2>
+              <span className="text-sm text-gray-500">{filteredPatients.length} appointments</span>
             </div>
 
             {/* Search and Filters */}
@@ -422,7 +424,7 @@ export function DoctorDashboard() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input 
-                  placeholder="Search patients..." 
+                  placeholder="Search appointments..." 
                   value={searchQuery} 
                   onChange={(e) => setSearchQuery(e.target.value)} 
                   className="form-input pl-10" 

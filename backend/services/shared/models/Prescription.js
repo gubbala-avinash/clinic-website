@@ -1,12 +1,15 @@
 import mongoose from 'mongoose';
 
 const prescriptionSchema = new mongoose.Schema({
+  // Unique prescription identifier
   prescriptionId: {
     type: String,
     unique: true,
     required: true,
     index: true
   },
+  
+  // Core relationships - ESSENTIAL
   appointmentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Appointment',
@@ -26,113 +29,23 @@ const prescriptionSchema = new mongoose.Schema({
     index: true
   },
   
-  // Prescription content
-  diagnosis: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 500
-  },
-  symptoms: [{
-    type: String,
-    trim: true,
-    maxlength: 100
-  }],
-  
-  medications: [{
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 200
-    },
-    genericName: {
-      type: String,
-      trim: true,
-      maxlength: 200
-    },
-    dosage: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 100
-    },
-    frequency: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 100
-    },
-    duration: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 100
-    },
-    instructions: {
-      type: String,
-      trim: true,
-      maxlength: 500
-    },
-    quantity: {
-      type: Number,
-      default: 1,
-      min: 1
-    },
-    unit: {
-      type: String,
-      enum: ['tablets', 'capsules', 'ml', 'mg', 'g'],
-      default: 'tablets'
-    }
-  }],
-  
-  tests: [{
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 200
-    },
-    type: {
-      type: String,
-      enum: ['blood', 'urine', 'imaging', 'other'],
-      default: 'blood'
-    },
-    instructions: {
-      type: String,
-      trim: true,
-      maxlength: 500
-    },
-    priority: {
-      type: String,
-      enum: ['routine', 'urgent', 'stat'],
-      default: 'routine'
-    }
-  }],
-  
-  // Digital prescription
-  whiteboardData: {
-    type: String, // Base64 encoded drawing data
-    maxlength: 1000000 // 1MB limit
-  },
-  prescriptionImage: {
-    type: String, // URL to uploaded image
-    maxlength: 500
-  },
+  // File storage information - ESSENTIAL
   prescriptionPdf: {
-    type: String, // URL to generated PDF
-    maxlength: 500
-  },
-  
-  // Status
-  status: {
-    type: String,
-    enum: ['draft', 'submitted', 'sent-to-pharmacy', 'fulfilled', 'cancelled'],
-    default: 'draft',
+    type: String, // Full file path relative to storage root
+    required: true,
+    maxlength: 500,
     index: true
   },
   
-  // Pharmacy workflow
+  // Status tracking - ESSENTIAL
+  status: {
+    type: String,
+    enum: ['draft', 'submitted', 'sent-to-pharmacy', 'fulfilled', 'cancelled'],
+    default: 'submitted',
+    index: true
+  },
+  
+  // Pharmacy workflow - OPTIONAL
   pharmacyId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -144,28 +57,7 @@ const prescriptionSchema = new mongoose.Schema({
     type: Date
   },
   
-  // Follow-up
-  followUpRequired: {
-    type: Boolean,
-    default: false
-  },
-  followUpDate: {
-    type: Date
-  },
-  followUpNotes: {
-    type: String,
-    trim: true,
-    maxlength: 1000
-  },
-  
-  // Additional notes
-  notes: {
-    type: String,
-    trim: true,
-    maxlength: 1000
-  },
-  
-  // Timestamps
+  // Timestamps - ESSENTIAL
   createdAt: {
     type: Date,
     default: Date.now
@@ -207,8 +99,8 @@ prescriptionSchema.virtual('appointment', {
 // Indexes for performance
 prescriptionSchema.index({ patientId: 1, createdAt: -1 });
 prescriptionSchema.index({ doctorId: 1, createdAt: -1 });
+prescriptionSchema.index({ appointmentId: 1 });
 prescriptionSchema.index({ status: 1, createdAt: -1 });
-prescriptionSchema.index({ pharmacyId: 1, status: 1 });
 
 // Pre-save middleware
 prescriptionSchema.pre('save', function(next) {
@@ -223,6 +115,10 @@ prescriptionSchema.statics.findByPatient = function(patientId) {
 
 prescriptionSchema.statics.findByDoctor = function(doctorId) {
   return this.find({ doctorId }).sort({ createdAt: -1 });
+};
+
+prescriptionSchema.statics.findByAppointment = function(appointmentId) {
+  return this.findOne({ appointmentId });
 };
 
 prescriptionSchema.statics.findByStatus = function(status) {
@@ -251,24 +147,5 @@ prescriptionSchema.methods.updateStatus = function(newStatus) {
   return this.save();
 };
 
-prescriptionSchema.methods.addMedication = function(medication) {
-  this.medications.push(medication);
-  return this.save();
-};
-
-prescriptionSchema.methods.addTest = function(test) {
-  this.tests.push(test);
-  return this.save();
-};
-
-prescriptionSchema.methods.getMedicationCount = function() {
-  return this.medications.length;
-};
-
-prescriptionSchema.methods.getTestCount = function() {
-  return this.tests.length;
-};
-
 export const Prescription = mongoose.model('Prescription', prescriptionSchema);
 export default Prescription;
-

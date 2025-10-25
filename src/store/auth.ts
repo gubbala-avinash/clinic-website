@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { authApi, type User, type LoginRequest, ApiError } from '../services/api'
 
-type Role = 'admin' | 'receptionist' | 'doctor' | 'pharmacist' | 'patient'
+type Role = 'admin' | 'receptionist' | 'doctor' | 'pharmacy' | 'patient'
 
 type AuthState = {
   user: User | null
@@ -38,8 +38,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
         
         console.log('Setting authenticated user:', response.user)
+        
+        // Handle role mapping for backward compatibility
+        const user = response.user
+        if (user.role === 'pharmacist') {
+          user.role = 'pharmacy'
+        }
+        
         set({ 
-          user: response.user, 
+          user: user, 
           isAuthenticated: true, 
           isLoading: false,
           error: null 
@@ -112,8 +119,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       if (response.success) {
         console.log('Auth successful, setting user:', response.user)
+        
+        // Handle role mapping for backward compatibility
+        const user = response.user
+        if (user.role === 'pharmacist') {
+          user.role = 'pharmacy'
+        }
+        
         set({ 
-          user: response.user, 
+          user: user, 
           isAuthenticated: true, 
           isLoading: false,
           error: null 

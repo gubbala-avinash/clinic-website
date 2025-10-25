@@ -12,8 +12,10 @@ import { PatientsPage } from './pages/admin/PatientsPage'
 import { SettingsPage } from './pages/admin/SettingsPage'
 import { DoctorDashboard } from './pages/doctor/DoctorDashboard'
 import { PrescriptionPage } from './pages/doctor/PrescriptionPage'
-import { PharmacyDashboard } from './pages/pharmacy/PharmacyDashboard'
+import PharmacyDashboard from './pages/pharmacy/PharmacyDashboard'
 import { PharmacyDetailPage } from './pages/pharmacy/PharmacyDetailPage'
+import ViewPrescription from './pages/pharmacy/ViewPrescription'
+import HistoryPage from './pages/receptionist/HistoryPage'
 import { AnalyticsPage } from './pages/analytics/AnalyticsPage'
 import { AuditLogsPage } from './pages/admin/AuditLogsPage'
 import { ServerStatusPage } from './pages/admin/ServerStatusPage'
@@ -21,7 +23,7 @@ import { useAuth } from './hooks/useApi'
 
 const queryClient = new QueryClient()
 
-function RoleRoute({ children, allow }: { children: React.ReactNode; allow: Array<'admin' | 'receptionist' | 'doctor' | 'pharmacist' | 'patient'> }) {
+function RoleRoute({ children, allow }: { children: React.ReactNode; allow: Array<'admin' | 'receptionist' | 'doctor' | 'pharmacy' | 'patient'> }) {
   const { isAuthenticated, user, isLoading } = useAuth()
   
   // Show loading while checking authentication
@@ -111,16 +113,24 @@ export default function App() {
             <Route
               path="pharmacy"
               element={
-                <RoleRoute allow={["pharmacist"]}>
+                <RoleRoute allow={["pharmacy", "admin", "receptionist"]}>
                   <PharmacyDashboard />
                 </RoleRoute>
               }
             />
             <Route
-              path="pharmacy/:id"
+              path="pharmacy/prescription/:id"
               element={
-                <RoleRoute allow={["pharmacist"]}>
-                  <PharmacyDetailPage />
+                <RoleRoute allow={["pharmacy", "admin", "receptionist"]}>
+                  <ViewPrescription />
+                </RoleRoute>
+              }
+            />
+            <Route
+              path="receptionist/history"
+              element={
+                <RoleRoute allow={["receptionist", "admin"]}>
+                  <HistoryPage />
                 </RoleRoute>
               }
             />

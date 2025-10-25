@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
-    enum: ['admin', 'receptionist', 'doctor', 'pharmacist', 'patient'],
+    enum: ['admin', 'receptionist', 'doctor', 'pharmacy', 'patient'],
     index: true
   },
   isActive: {
@@ -165,7 +165,7 @@ userSchema.methods.getRoleInfo = function() {
   switch (this.role) {
     case 'doctor':
       return this.doctorInfo;
-    case 'pharmacist':
+    case 'pharmacy':
       return this.pharmacistInfo;
     case 'patient':
       return this.patientInfo;
