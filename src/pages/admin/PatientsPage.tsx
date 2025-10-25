@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { 
-  Search, 
-  Plus, 
-  Filter, 
+import {
+  Search,
+  Plus,
+  Filter,
   MoreVertical,
   User,
   Phone,
@@ -45,6 +45,12 @@ export function PatientsPage() {
   const [showAddPatientModal, setShowAddPatientModal] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
   const [showPatientDetails, setShowPatientDetails] = useState(false)
+  const [showDeletePatientModal, setShowDeletePatientModal] = useState(false)
+  const [selectedPatientToDelete, setSelectedPatientToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch patients from API
   const { data: patientsData, isLoading, error, refetch } = useApi(async () => {
@@ -56,21 +62,53 @@ export function PatientsPage() {
     }
     return response.json()
   })
+  
+  // Handle patient deletion
+  const handleDeletePatient = async () => {
+    if (!selectedPatientToDelete) return
+
+    setIsDeleting(true)
+    setDeleteError(null)
+    setDeleteSuccess(null) // Reset success message
+
+    try {
+      const response = await fetch(`http://localhost:3000/api/patients/${selectedPatientToDelete}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to delete patient')
+      }
+
+      // Success: Refetch data, close modal, and reset state
+      setDeleteSuccess('Patient deleted successfully!') // Set success
+      refetch()
+      setShowDeletePatientModal(false)
+      setSelectedPatientToDelete(null)
+
+    } catch (error: any) {
+      setDeleteError(error.message || 'An unknown error occurred')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const patients: Patient[] = patientsData?.data || []
 
   const filteredPatients = patients.filter(patient => {
-    const matchesSearch = 
+    const matchesSearch =
       patient.firstName.toLowerCase().includes(query.toLowerCase()) ||
       patient.lastName.toLowerCase().includes(query.toLowerCase()) ||
       patient.email.toLowerCase().includes(query.toLowerCase()) ||
       patient.phone.includes(query)
-    
-    const matchesStatus = 
-      statusFilter === 'all' || 
+
+    const matchesStatus =
+      statusFilter === 'all' ||
       (statusFilter === 'active' && patient.isActive) ||
       (statusFilter === 'inactive' && !patient.isActive)
-    
+
     return matchesSearch && matchesStatus
   })
 
@@ -124,8 +162,9 @@ export function PatientsPage() {
           <AlertCircle className="h-5 w-5 text-red-400" />
           <div className="ml-3">
             <h3 className="text-sm font-medium text-red-800">Error</h3>
-            <div className="mt-2 text-sm text-red-700">{error}</div>
-            <button 
+            {/* Corrected: Use error.message */}
+            <div className="mt-2 text-sm text-red-700">{error.message}</div> 
+            <button
               onClick={() => refetch()}
               className="mt-2 text-sm text-red-600 hover:text-red-500 underline"
             >
@@ -150,7 +189,7 @@ export function PatientsPage() {
             <Filter className="w-4 h-4 mr-2" />
             Filter
           </button>
-          <button 
+          <button
             onClick={() => setShowAddPatientModal(true)}
             className="btn-primary inline-flex items-center"
           >
@@ -214,17 +253,17 @@ export function PatientsPage() {
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input 
-                placeholder="Search patients..." 
-                value={query} 
-                onChange={(e) => setQuery(e.target.value)} 
-                className="form-input pl-10" 
+              <input
+                placeholder="Search patients..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="form-input pl-10"
               />
             </div>
           </div>
           <div className="flex gap-2">
-            <select 
-              value={statusFilter} 
+            <select
+              value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="form-input w-auto"
             >
@@ -242,13 +281,13 @@ export function PatientsPage() {
               <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
               <p className="text-gray-600 mb-4">
-                {query || statusFilter !== 'all' 
+                {query || statusFilter !== 'all'
                   ? 'Try adjusting your search or filter criteria'
                   : 'Get started by adding your first patient'
                 }
               </p>
               {!query && statusFilter === 'all' && (
-                <button 
+                <button
                   onClick={() => setShowAddPatientModal(true)}
                   className="btn-primary"
                 >
@@ -265,11 +304,10 @@ export function PatientsPage() {
                       <h3 className="text-lg font-semibold text-gray-900">
                         {patient.firstName} {patient.lastName}
                       </h3>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        patient.isActive 
-                          ? 'bg-green-100 text-green-800' 
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${patient.isActive
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
-                      }`}>
+                        }`}>
                         {patient.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
@@ -300,7 +338,7 @@ export function PatientsPage() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => {
                         setSelectedPatient(patient)
                         setShowPatientDetails(true)
@@ -314,7 +352,14 @@ export function PatientsPage() {
                       <Edit className="w-4 h-4 mr-1" />
                       Edit
                     </button>
-                    <button className="btn-secondary text-sm text-red-600 hover:text-red-700">
+                    {/* Corrected: Removed handleDeletePatient() from here */}
+                    <button
+                      onClick={() => {
+                        setSelectedPatientToDelete(patient.id)
+                        setShowDeletePatientModal(true)
+                      }}
+                      className="btn-secondary text-sm text-red-600 hover:text-red-700"
+                    >
                       <Trash2 className="w-4 h-4 mr-1" />
                       Delete
                     </button>
@@ -338,14 +383,14 @@ export function PatientsPage() {
                 <h2 className="text-xl font-bold text-gray-900">
                   Patient Details
                 </h2>
-                <button 
+                <button
                   onClick={() => setShowPatientDetails(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 text-3xl leading-none"
                 >
-                  ×
+                  &times;
                 </button>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -373,7 +418,7 @@ export function PatientsPage() {
                     <p className="text-gray-900">{selectedPatient.isActive ? 'Active' : 'Inactive'}</p>
                   </div>
                 </div>
-                
+
                 {selectedPatient.patientInfo?.address && (
                   <div>
                     <label className="text-sm font-medium text-gray-600">Address</label>
@@ -382,19 +427,18 @@ export function PatientsPage() {
                     </p>
                   </div>
                 )}
-                
+
                 {selectedPatient.patientInfo?.medicalHistory && selectedPatient.patientInfo.medicalHistory.length > 0 && (
                   <div>
                     <label className="text-sm font-medium text-gray-600">Medical History</label>
-                    <div className="mt-1">
+                    <div className="mt-1 space-y-1">
                       {selectedPatient.patientInfo.medicalHistory.map((history, index) => (
                         <div key={index} className="flex items-center gap-2 text-sm">
                           <span className="text-gray-900">{history.condition}</span>
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            history.status === 'active' 
-                              ? 'bg-red-100 text-red-800' 
+                          <span className={`px-2 py-0.5 rounded-full text-xs ${history.status === 'active'
+                              ? 'bg-red-100 text-red-800'
                               : 'bg-green-100 text-green-800'
-                          }`}>
+                            }`}>
                             {history.status}
                           </span>
                         </div>
@@ -407,6 +451,65 @@ export function PatientsPage() {
           </div>
         </div>
       )}
+
+      {/* --- ADDED DELETE MODAL --- */}
+      {/* Delete Patient Modal */}
+      {showDeletePatientModal && selectedPatientToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-start">
+              <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                <AlertCircle className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="ml-4 text-left">
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  Delete Patient
+                </h3>
+                <div className="mt-2">
+                  <p className="text-sm text-gray-500">
+                    Are you sure you want to delete this patient? This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="mt-4 bg-red-50 p-3 rounded-md">
+                <p className="text-sm text-red-700">{deleteError}</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col sm:flex-row-reverse gap-3">
+              <button
+                type="button"
+                onClick={handleDeletePatient} // This button calls the delete function
+                disabled={isDeleting}
+                className="btn-danger w-full sm:w-auto inline-flex justify-center"
+              >
+                {isDeleting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-2" />
+                )}
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeletePatientModal(false)
+                  setSelectedPatientToDelete(null)
+                  setDeleteError(null)
+                }}
+                disabled={isDeleting}
+                className="btn-secondary w-full sm:w-auto inline-flex justify-center"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

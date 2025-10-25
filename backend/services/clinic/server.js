@@ -14,6 +14,11 @@ import path from 'path';
 import fs from 'fs';
 import puppeteer from 'puppeteer';
 import jwt from 'jsonwebtoken';
+import { fileURLToPath } from 'url';
+
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables
 dotenv.config({ path: '../../.env' });
@@ -144,12 +149,12 @@ app.get('/api/appointments', async (req, res) => {
       }
       
       return {
-        id: apt._id,
+      id: apt._id,
         patientName,
         doctorName,
-        date: apt.scheduledAt.toISOString().split('T')[0],
-        time: apt.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
-        status: apt.status,
+      date: apt.scheduledAt.toISOString().split('T')[0],
+      time: apt.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+      status: apt.status,
         reason: apt.reason || 'No reason provided',
         phone,
         email
@@ -293,10 +298,10 @@ app.post('/api/public/appointments', async (req, res) => {
       // If doctor not found, use the first available doctor
       const firstDoctor = await User.findOne({ role: 'doctor', isActive: true });
       if (!firstDoctor) {
-        return res.status(400).json({
+      return res.status(400).json({
           error: 'No doctors available',
           code: 'NO_DOCTORS_AVAILABLE'
-        });
+      });
       }
       doctor = firstDoctor;
     }
@@ -785,6 +790,546 @@ app.get('/api/doctor/appointments', authenticateToken, async (req, res) => {
 // ===========================================
 // PRESCRIPTION ROUTES
 // ===========================================
+
+// Generate PDF (download only)
+app.post('/api/prescriptions/generate-pdf', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Ensure only doctors can generate prescriptions
+    if (user.role !== 'doctor') {
+      return res.status(403).json({
+        error: 'Access denied. Only doctors can generate prescriptions.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const {
+      patientName,
+      patientAge,
+      patientGender,
+      patientPhone,
+      patientEmail,
+      doctorName,
+      doctorQualification,
+      doctorRegistration,
+      clinicName,
+      clinicAddress,
+      clinicPhone,
+      diagnosis,
+      medications,
+      tests,
+      notes,
+      whiteboardData,
+      doctorSignature,
+      currentDate,
+      prescriptionId
+    } = req.body;
+
+    console.log('Generating PDF for prescription:', prescriptionId);
+
+    // Create HTML content for PDF
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Prescription - ${patientName}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: white;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+          }
+          .clinic-info {
+            margin-bottom: 20px;
+          }
+          .patient-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+          }
+          .prescription-content {
+            margin-bottom: 30px;
+          }
+          .whiteboard-section {
+            margin: 20px 0;
+            text-align: center;
+          }
+          .whiteboard-section img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+          }
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            page-break-before: avoid;
+          }
+          .signature-box {
+            text-align: center;
+            min-width: 250px;
+          }
+          .signature-box img {
+            max-width: 200px;
+            max-height: 80px;
+            object-fit: contain;
+            border: 1px solid #ddd;
+            padding: 5px;
+          }
+          .medications, .tests {
+            margin: 15px 0;
+          }
+          .medications ul, .tests ul {
+            margin: 5px 0;
+            padding-left: 20px;
+          }
+          .diagnosis {
+            font-weight: bold;
+            margin: 15px 0;
+            padding: 10px;
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+          }
+          .notes {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${clinicName}</h1>
+          <p>${clinicAddress}</p>
+          <p>Phone: ${clinicPhone}</p>
+        </div>
+
+        <div class="patient-info">
+          <div>
+            <h3>Patient Information</h3>
+            <p><strong>Name:</strong> ${patientName}</p>
+            <p><strong>Age:</strong> ${patientAge} years</p>
+            <p><strong>Gender:</strong> ${patientGender}</p>
+            <p><strong>Phone:</strong> ${patientPhone}</p>
+            <p><strong>Email:</strong> ${patientEmail}</p>
+          </div>
+          <div>
+            <h3>Doctor Information</h3>
+            <p><strong>Name:</strong> ${doctorName}</p>
+            <p><strong>Qualification:</strong> ${doctorQualification}</p>
+            <p><strong>Registration:</strong> ${doctorRegistration}</p>
+            <p><strong>Date:</strong> ${currentDate}</p>
+          </div>
+        </div>
+
+        <div class="prescription-content">
+          <div class="diagnosis">
+            <strong>Diagnosis:</strong> ${diagnosis || 'Not specified'}
+          </div>
+
+          ${medications && medications.length > 0 ? `
+            <div class="medications">
+              <h3>Medications:</h3>
+              <ul>
+                ${medications.map(med => `<li>${med}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${tests && tests.length > 0 ? `
+            <div class="tests">
+              <h3>Tests Recommended:</h3>
+              <ul>
+                ${tests.map(test => `<li>${test}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${notes ? `
+            <div class="notes">
+              <h3>Notes:</h3>
+              <p>${notes}</p>
+            </div>
+          ` : ''}
+
+          ${whiteboardData ? `
+            <div class="whiteboard-section">
+              <h3>Prescription Details:</h3>
+              <img src="${whiteboardData}" alt="Prescription Whiteboard" />
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="signature-section">
+          <div>
+            <p><strong>Date:</strong> ${currentDate}</p>
+            <p><strong>Time:</strong> ${new Date().toLocaleTimeString()}</p>
+          </div>
+          <div class="signature-box">
+            <p><strong>Doctor's Signature</strong></p>
+            <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; min-height: 80px; display: flex; align-items: center; justify-content: center;">
+              ${doctorSignature ? `<img src="${doctorSignature}" alt="Doctor Signature" />` : '<p style="margin: 0; color: #666;">_________________</p>'}
+            </div>
+            <p style="margin: 5px 0; font-weight: bold;">${doctorName}</p>
+            <p style="margin: 0; color: #666;">${doctorQualification}</p>
+            <p style="margin: 0; color: #666;">${doctorRegistration}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Generate PDF using Puppeteer
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    // Wait for images to load
+    try {
+      await page.waitForSelector('img', { timeout: 5000 });
+    } catch (error) {
+      console.log('No images found, continuing...');
+    }
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20px',
+        right: '20px',
+        bottom: '20px',
+        left: '20px'
+      }
+    });
+    
+    await browser.close();
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="prescription-${patientName}-${currentDate}.pdf"`);
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    res.status(500).json({
+      error: 'Failed to generate PDF',
+      code: 'PDF_GENERATION_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// Generate and save PDF to server
+app.post('/api/prescriptions/generate-and-save-pdf', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Ensure only doctors can generate prescriptions
+    if (user.role !== 'doctor') {
+      return res.status(403).json({
+        error: 'Access denied. Only doctors can generate prescriptions.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const {
+      patientName,
+      patientAge,
+      patientGender,
+      patientPhone,
+      patientEmail,
+      doctorName,
+      doctorQualification,
+      doctorRegistration,
+      clinicName,
+      clinicAddress,
+      clinicPhone,
+      diagnosis,
+      medications,
+      tests,
+      notes,
+      whiteboardData,
+      doctorSignature,
+      currentDate,
+      prescriptionId
+    } = req.body;
+
+    console.log('Generating and saving PDF for prescription:', prescriptionId);
+
+    // Create HTML content for PDF (same as above)
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Prescription - ${patientName}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: white;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+          }
+          .clinic-info {
+            margin-bottom: 20px;
+          }
+          .patient-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+          }
+          .prescription-content {
+            margin-bottom: 30px;
+          }
+          .whiteboard-section {
+            margin: 20px 0;
+            text-align: center;
+          }
+          .whiteboard-section img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+          }
+          .signature-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            page-break-before: avoid;
+          }
+          .signature-box {
+            text-align: center;
+            min-width: 250px;
+          }
+          .signature-box img {
+            max-width: 200px;
+            max-height: 80px;
+            object-fit: contain;
+            border: 1px solid #ddd;
+            padding: 5px;
+          }
+          .medications, .tests {
+            margin: 15px 0;
+          }
+          .medications ul, .tests ul {
+            margin: 5px 0;
+            padding-left: 20px;
+          }
+          .diagnosis {
+            font-weight: bold;
+            margin: 15px 0;
+            padding: 10px;
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+          }
+          .notes {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${clinicName}</h1>
+          <p>${clinicAddress}</p>
+          <p>Phone: ${clinicPhone}</p>
+        </div>
+
+        <div class="patient-info">
+          <div>
+            <h3>Patient Information</h3>
+            <p><strong>Name:</strong> ${patientName}</p>
+            <p><strong>Age:</strong> ${patientAge} years</p>
+            <p><strong>Gender:</strong> ${patientGender}</p>
+            <p><strong>Phone:</strong> ${patientPhone}</p>
+            <p><strong>Email:</strong> ${patientEmail}</p>
+          </div>
+          <div>
+            <h3>Doctor Information</h3>
+            <p><strong>Name:</strong> ${doctorName}</p>
+            <p><strong>Qualification:</strong> ${doctorQualification}</p>
+            <p><strong>Registration:</strong> ${doctorRegistration}</p>
+            <p><strong>Date:</strong> ${currentDate}</p>
+          </div>
+        </div>
+
+        <div class="prescription-content">
+          <div class="diagnosis">
+            <strong>Diagnosis:</strong> ${diagnosis || 'Not specified'}
+          </div>
+
+          ${medications && medications.length > 0 ? `
+            <div class="medications">
+              <h3>Medications:</h3>
+              <ul>
+                ${medications.map(med => `<li>${med}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${tests && tests.length > 0 ? `
+            <div class="tests">
+              <h3>Tests Recommended:</h3>
+              <ul>
+                ${tests.map(test => `<li>${test}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${notes ? `
+            <div class="notes">
+              <h3>Notes:</h3>
+              <p>${notes}</p>
+            </div>
+          ` : ''}
+
+          ${whiteboardData ? `
+            <div class="whiteboard-section">
+              <h3>Prescription Details:</h3>
+              <img src="${whiteboardData}" alt="Prescription Whiteboard" />
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="signature-section">
+          <div>
+            <p><strong>Date:</strong> ${currentDate}</p>
+            <p><strong>Time:</strong> ${new Date().toLocaleTimeString()}</p>
+          </div>
+          <div class="signature-box">
+            <p><strong>Doctor's Signature</strong></p>
+            <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; min-height: 80px; display: flex; align-items: center; justify-content: center;">
+              ${doctorSignature ? `<img src="${doctorSignature}" alt="Doctor Signature" />` : '<p style="margin: 0; color: #666;">_________________</p>'}
+            </div>
+            <p style="margin: 5px 0; font-weight: bold;">${doctorName}</p>
+            <p style="margin: 0; color: #666;">${doctorQualification}</p>
+            <p style="margin: 0; color: #666;">${doctorRegistration}</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Generate PDF using Puppeteer
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    // Wait for images to load
+    try {
+      await page.waitForSelector('img', { timeout: 5000 });
+    } catch (error) {
+      console.log('No images found, continuing...');
+    }
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '20px',
+        right: '20px',
+        bottom: '20px',
+        left: '20px'
+      }
+    });
+    
+    await browser.close();
+
+    // Create organized storage structure
+    const storageDir = path.join(__dirname, '../../storage');
+    const prescriptionsDir = path.join(storageDir, 'prescriptions');
+    const year = new Date().getFullYear();
+    const month = String(new Date().getMonth() + 1).padStart(2, '0');
+    const yearMonthDir = path.join(prescriptionsDir, `${year}`, `${month}`);
+    
+    // Create directories if they don't exist
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+    if (!fs.existsSync(prescriptionsDir)) {
+      fs.mkdirSync(prescriptionsDir, { recursive: true });
+    }
+    if (!fs.existsSync(yearMonthDir)) {
+      fs.mkdirSync(yearMonthDir, { recursive: true });
+    }
+
+    // Generate filename with better organization
+    const sanitizedPatientName = patientName.replace(/[^a-zA-Z0-9]/g, '_');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `prescription_${sanitizedPatientName}_${dateStr}_${prescriptionId}.pdf`;
+    const filePath = path.join(yearMonthDir, fileName);
+
+    // Save PDF to server
+    fs.writeFileSync(filePath, pdfBuffer);
+
+    console.log('PDF saved to:', filePath);
+
+    // Calculate relative path for easier access
+    const relativePath = path.relative(storageDir, filePath);
+    
+    res.json({
+      success: true,
+      message: 'Prescription PDF generated and saved successfully',
+      fileName: fileName,
+      filePath: filePath,
+      relativePath: relativePath,
+      storagePath: `storage/prescriptions/${year}/${month}/${fileName}`,
+      prescriptionId: prescriptionId,
+      patientName: patientName,
+      doctorName: doctorName,
+      generatedAt: new Date().toISOString(),
+      fileSize: pdfBuffer.length
+    });
+
+  } catch (error) {
+    console.error('PDF save error:', error);
+    res.status(500).json({
+      error: 'Failed to generate and save PDF',
+      code: 'PDF_SAVE_ERROR',
+      details: error.message
+    });
+  }
+});
 
 // Get prescriptions
 app.get('/api/prescriptions', async (req, res) => {
@@ -1690,112 +2235,42 @@ app.delete('/api/files/prescription/:prescriptionId', async (req, res) => {
   }
 });
 
-// Generate prescription PDF
-app.post('/api/prescriptions/generate-pdf', async (req, res) => {
+
+// Serve prescription files
+app.get('/api/prescriptions/files/*', authenticateToken, (req, res) => {
   try {
-    const prescriptionData = req.body;
+    const user = req.user;
     
-    // Validate required fields
-    if (!prescriptionData.patientName || !prescriptionData.doctorName) {
-      return res.status(400).json({
-        error: 'Patient name and doctor name are required',
-        code: 'MISSING_REQUIRED_FIELDS'
+    // Ensure only doctors, admins, and receptionists can access prescription files
+    if (!['doctor', 'admin', 'receptionist'].includes(user.role)) {
+      return res.status(403).json({
+        error: 'Access denied. Only authorized personnel can access prescription files.',
+        code: 'ACCESS_DENIED'
       });
     }
-
-    // Generate PDF
-    const result = await generatePrescriptionPDF(prescriptionData);
     
-    if (result.success) {
-      // Set response headers for PDF download
+    const filePath = path.join(__dirname, '../../storage/prescriptions', req.params[0]);
+    
+    if (fs.existsSync(filePath)) {
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="prescription_${prescriptionData.patientName}_${Date.now()}.pdf"`);
-      res.setHeader('Content-Length', result.size);
-      
-      // Send PDF buffer
-      res.send(result.pdfBuffer);
+      res.setHeader('Content-Disposition', 'inline');
+      res.sendFile(filePath);
     } else {
-      res.status(500).json({
-        error: 'Failed to generate PDF',
-        code: 'PDF_GENERATION_ERROR',
-        details: result.error
+      res.status(404).json({
+        error: 'Prescription file not found',
+        code: 'FILE_NOT_FOUND'
       });
     }
   } catch (error) {
-    console.error('Generate prescription PDF error:', error);
+    console.error('Serve prescription file error:', error);
     res.status(500).json({
-      error: 'Failed to generate prescription PDF',
-      code: 'PDF_ERROR'
+      error: 'Failed to serve prescription file',
+      code: 'SERVE_ERROR'
     });
   }
 });
 
-// Generate and save prescription PDF
-app.post('/api/prescriptions/generate-and-save-pdf', async (req, res) => {
-  try {
-    const prescriptionData = req.body;
-    
-    // Validate required fields
-    if (!prescriptionData.patientName || !prescriptionData.doctorName || !prescriptionData.prescriptionId) {
-      return res.status(400).json({
-        error: 'Patient name, doctor name, and prescription ID are required',
-        code: 'MISSING_REQUIRED_FIELDS'
-      });
-    }
-
-    // Generate PDF
-    const result = await generatePrescriptionPDF(prescriptionData);
-    
-    if (result.success) {
-      // Create a file object for saving
-      const file = {
-        buffer: result.pdfBuffer,
-        originalname: `prescription_${prescriptionData.prescriptionId}.pdf`,
-        mimetype: 'application/pdf',
-        size: result.size
-      };
-
-      // Save PDF to organized storage
-      const saveResult = await localFileStorage.savePrescriptionFile(file, prescriptionData.prescriptionId, 'pdfs');
-      
-      if (saveResult.success) {
-        res.json({
-          success: true,
-          message: 'Prescription PDF generated and saved successfully',
-          data: {
-            filename: saveResult.filename,
-            url: saveResult.url,
-            relativePath: saveResult.relativePath,
-            size: saveResult.size,
-            prescriptionId: saveResult.prescriptionId,
-            fileType: saveResult.fileType,
-            uploadedAt: saveResult.uploadedAt
-          }
-        });
-      } else {
-        res.status(500).json({
-          error: 'Failed to save PDF',
-          code: 'SAVE_ERROR',
-          details: saveResult.error
-        });
-      }
-    } else {
-      res.status(500).json({
-        error: 'Failed to generate PDF',
-        code: 'PDF_GENERATION_ERROR',
-        details: result.error
-      });
-    }
-  } catch (error) {
-    console.error('Generate and save prescription PDF error:', error);
-    res.status(500).json({
-      error: 'Failed to generate and save prescription PDF',
-      code: 'PDF_ERROR'
-    });
-  }
-});
-
-// Serve uploaded files
+// Serve uploaded files (legacy)
 app.get('/uploads/prescriptions/*', (req, res) => {
   try {
     const filePath = path.join(__dirname, '../../../uploads/prescriptions', req.params[0]);
@@ -2022,7 +2497,7 @@ app.get('/api/analytics/dashboard', async (req, res) => {
       value: totalAppointmentsForStatus > 0 ? Math.round((item.count / totalAppointmentsForStatus) * 100) : 0,
       count: item.count
     }));
-
+    
     const analytics = {
       totalPatients,
       totalAppointments,
