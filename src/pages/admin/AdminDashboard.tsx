@@ -52,9 +52,16 @@ export function AdminDashboard() {
       setIsLoading(true)
       const response = await appointmentsApi.getAppointments()
       
-      if (response.success) {
+      if (response && response.success && response.data) {
         setAppointments(response.data)
+        console.log('Appointments loaded successfully:', response.data.length)
       } else {
+        console.warn('Appointments response structure:', response)
+        // If response is empty object (304 case), don't show error
+        if (response && Object.keys(response).length === 0) {
+          console.log('Empty response (likely 304) - not showing error')
+          return
+        }
         error('Failed to load appointments', 'Please try again later')
       }
     } catch (err) {

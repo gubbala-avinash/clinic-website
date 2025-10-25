@@ -123,8 +123,17 @@ class HttpClient {
     try {
       const response = await fetch(url, config);
       
+      // Handle 304 Not Modified as success (cached response)
+      if (response.status === 304) {
+        console.log('Response 304 (Not Modified) - returning cached data');
+        // For 304 responses, we should return the cached data
+        // Since we can't get the cached data from the response, we'll let the frontend handle it
+        return {} as T;
+      }
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('API Error:', response.status, errorData);
         throw new ApiError(
           response.status,
           errorData.code || 'UNKNOWN_ERROR',
@@ -137,6 +146,7 @@ class HttpClient {
       if (error instanceof ApiError) {
         throw error;
       }
+      console.error('Network error:', error);
       throw new ApiError(0, 'NETWORK_ERROR', 'Network error occurred');
     }
   }

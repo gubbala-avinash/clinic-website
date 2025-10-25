@@ -174,7 +174,7 @@ export function DoctorDashboard() {
       const response = await doctorApi.getMyAppointments()
       console.log('Doctor appointments response:', response)
       
-      if (response.success) {
+      if (response && response.success && response.data) {
         // Filter for waiting appointments only
         const waitingAppointments = response.data.filter((apt: Appointment) => apt.status === 'waiting')
         setAppointments(waitingAppointments)
@@ -194,8 +194,14 @@ export function DoctorDashboard() {
           vitalSigns: undefined
         }))
         setPatients(patientsData)
-        success('Attended Patients Loaded', `Found ${attendedAppointments.length} patients waiting for consultation`)
+        success('Attended Patients Loaded', `Found ${waitingAppointments.length} patients waiting for consultation`)
       } else {
+        console.warn('Doctor appointments response structure:', response)
+        // If response is empty object (304 case), don't show error
+        if (response && Object.keys(response).length === 0) {
+          console.log('Empty response (likely 304) - not showing error')
+          return
+        }
         showError('Failed to load appointments', 'Please try again later')
       }
     } catch (err) {

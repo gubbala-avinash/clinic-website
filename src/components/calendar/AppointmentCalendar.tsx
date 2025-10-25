@@ -56,7 +56,15 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({ onDateSelect 
   };
 
   const getAppointmentsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    console.log('Filtering appointments for date:', dateStr);
+    console.log('Available appointment dates:', appointments.map(apt => apt.date));
+    
     return appointments.filter(apt => apt.date === dateStr);
   };
 
@@ -81,8 +89,15 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({ onDateSelect 
 
   const handleDateClick = (day: number) => {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    const dateStr = date.toISOString().split('T')[0];
+    // Use the same date formatting as getAppointmentsForDate
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${dayStr}`;
+    
+    console.log('Date clicked:', dateStr);
     const dayAppointments = getAppointmentsForDate(date);
+    console.log('Found appointments:', dayAppointments.length);
     
     setSelectedDate(dateStr);
     onDateSelect(dateStr, dayAppointments);
@@ -163,7 +178,19 @@ const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({ onDateSelect 
 
                 const appointmentCount = getAppointmentCount(day);
                 const isToday = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toDateString();
-                const isSelected = selectedDate === new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toISOString().split('T')[0];
+                
+                // Use the same date formatting as handleDateClick
+                const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const dayStr = String(date.getDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${dayStr}`;
+                const isSelected = selectedDate === dateStr;
+                
+                // Debug logging for selected date
+                if (isSelected) {
+                  console.log('Date is selected:', dateStr, 'selectedDate:', selectedDate);
+                }
 
                 return (
                   <button
