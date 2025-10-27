@@ -397,7 +397,7 @@ app.post('/api/public/appointments', async (req, res) => {
     // Find or create patient
     const nameParts = patientName.trim().split(' ');
     const firstName = nameParts[0] || 'Patient';
-    const lastName = nameParts.slice(1).join(' ') || 'User'; // Join remaining parts as lastName
+    const lastName = nameParts.slice(1).join(' ') ; // Join remaining parts as lastName
     
     let patient = await User.findOne({ 
       $or: [

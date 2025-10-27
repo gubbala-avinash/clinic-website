@@ -38,7 +38,7 @@ export interface Appointment {
   doctorName: string;
   date: string;
   time: string;
-  status: 'scheduled' | 'confirmed' | 'attended' | 'not-attended' | 'checked-in' | 'completed' | 'cancelled' | 'in-progress';
+  status: 'scheduled' | 'confirmed' | 'attended' | 'not-attended' | 'checked-in' | 'completed' | 'cancelled' | 'in-progress'| 'waiting';
   reason: string;
   phone: string;
   email: string;
@@ -82,14 +82,22 @@ export interface Analytics {
 }
 
 // API Error class
+// API Error class
 export class ApiError extends Error {
+  // 1. Declare properties here
+  status: number;
+  code: string;
+
   constructor(
-    public status: number,
-    public code: string,
+    // 2. Remove 'public' from parameters
+    status: number,
+    code: string,
     message: string
   ) {
     super(message);
-    this.name = 'ApiError';
+    // 3. Assign them manually
+    this.status = status;
+    this.code = code;
   }
 }
 

@@ -205,12 +205,12 @@ app.get('/api/appointments/cleanup', async (req, res) => {
     console.log(`Found ${orphanedAppointments.length} orphaned appointments`);
 
     // Optionally delete orphaned appointments (uncomment if needed)
-    // await Appointment.deleteMany({
-    //   $or: [
-    //     { patientId: null },
-    //     { doctorId: null }
-    //   ]
-    // });
+    await Appointment.deleteMany({
+      $or: [
+        { patientId: null },
+        { doctorId: null }
+      ]
+    });
 
     res.json({
       success: true,
@@ -3859,7 +3859,7 @@ app.patch('/api/patients/:id', async (req, res) => {
 app.delete('/api/patients/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+    await Appointment.deleteMany({ patientId: id });
     const patient = await User.findOneAndDelete({ _id: id, role: 'patient' });
     
     if (!patient) {
