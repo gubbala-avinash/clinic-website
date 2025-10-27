@@ -170,7 +170,7 @@ export function LoginPage() {
                 <div><strong>Admin:</strong> admin@clinic.com / admin123</div>
                 <div><strong>Doctor:</strong> dr.smith@clinic.com / doctor123</div>
                 <div><strong>Receptionist:</strong> reception@clinic.com / reception123</div>
-                <div><strong>Pharmacy:</strong> pharmacy@clinic.com / pharmacy123</div>
+                <div><strong>Pharmacy:</strong> pharmacist@clinic.com / pharmacist123</div>
                 <div><strong>Patient:</strong> rahul@example.com / patient123</div>
               </div>
             </div>
