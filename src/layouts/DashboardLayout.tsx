@@ -61,6 +61,7 @@ export function DashboardLayout() {
               <NavLink
                 key={item.name}
                 to={item.href}
+                end={item.href === '/admin'}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
@@ -97,6 +98,7 @@ export function DashboardLayout() {
               <NavLink
                 key={item.name}
                 to={item.href}
+                end={item.href === '/admin'}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
