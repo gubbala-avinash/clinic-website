@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-
+import { queue } from '../email/emailQueue.js'
 // Load environment variables
 dotenv.config({ path: '../../.env' });
 
@@ -485,6 +485,21 @@ app.post('/api/public/appointments', async (req, res) => {
       phone: appointment.patientId.phone,
       email: appointment.patientId.email
     };
+
+    await queue.add("emailQueue", {
+      template : "booking_confirmation",
+      to : formattedAppointment.email,
+      data : {
+        patientName : formattedAppointment.patientName,
+        doctorName : formattedAppointment.doctorName,
+        appointmentDate : formattedAppointment.date,
+        appointmentTime : formattedAppointment.time,
+        appointmentReason : formattedAppointment.reason,
+      }
+    })
+
+
+    console.log('Email queued successfully');
     
     res.status(201).json({
       success: true,

@@ -17,6 +17,7 @@ import puppeteer from 'puppeteer';
 import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
+import { queue } from '../email/emailQueue.js';
 
 // Get __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -621,7 +622,21 @@ app.patch('/api/appointments/:id/confirm', authenticateToken, async (req, res) =
     const doctorName = appointment.doctorId 
       ? `Dr. ${appointment.doctorId.firstName || 'Unknown'} ${appointment.doctorId.lastName || 'Doctor'}`
       : 'Unknown Doctor';
-
+    
+    // Add Job to email Queue
+    await queue.add("emailQueue", {
+      template: "appointment_confirmed",
+      to: appointment.patientId?.email,
+      data: {
+        patientName,
+        doctorName,
+        appointmentDate: appointment.scheduledAt.toISOString().split('T')[0],
+        appointmentTime: appointment.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
+        appointmentReason: appointment.reason || 'No reason provided',
+      },
+    });
+    
+   
     res.json({
       success: true,
       message: 'Appointment confirmed successfully',
