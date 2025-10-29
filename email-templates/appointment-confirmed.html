@@ -1,438 +1,276 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Appointment Confirmed</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #1f2937;
-            background-color: #f9fafb;
-        }
-        
-        .email-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .header {
-            background-color: #ffffff;
-            border-bottom: 1px solid #e5e7eb;
-            padding: 32px 24px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 24px;
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 8px;
-        }
-        
-        .header p {
-            font-size: 16px;
-            color: #6b7280;
-        }
-        
-        .content {
-            padding: 32px 24px;
-        }
-        
-        .greeting {
-            font-size: 18px;
-            color: #111827;
-            margin-bottom: 24px;
-            font-weight: 500;
-        }
-        
-        .status-card {
-            background-color: #d1fae5;
-            border: 1px solid #10b981;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 24px 0;
-            text-align: center;
-        }
-        
-        .status-card h2 {
-            font-size: 18px;
-            color: #065f46;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-        
-        .status-card p {
-            font-size: 14px;
-            color: #065f46;
-        }
-        
-        .appointment-details {
-            background-color: #f0fdf4;
-            border: 1px solid #10b981;
-            border-radius: 8px;
-            padding: 24px;
-            margin: 24px 0;
-        }
-        
-        .appointment-details h3 {
-            color: #111827;
-            font-size: 18px;
-            margin-bottom: 16px;
-            font-weight: 600;
-        }
-        
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #d1fae5;
-        }
-        
-        .detail-row:last-child {
-            border-bottom: none;
-        }
-        
-        .detail-label {
-            font-weight: 500;
-            color: #6b7280;
-            font-size: 14px;
-        }
-        
-        .detail-value {
-            color: #111827;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        
-        .confirmed-badge {
-            background-color: #d1fae5;
-            color: #065f46;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        
-        .important-notes {
-            background-color: #fef2f2;
-            border: 1px solid #f87171;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 24px 0;
-        }
-        
-        .important-notes h3 {
-            color: #991b1b;
-            font-size: 16px;
-            margin-bottom: 12px;
-            font-weight: 600;
-        }
-        
-        .important-notes ul {
-            list-style: none;
-            padding-left: 0;
-        }
-        
-        .important-notes li {
-            padding: 6px 0;
-            position: relative;
-            padding-left: 20px;
-            font-size: 14px;
-            color: #991b1b;
-        }
-        
-        .important-notes li::before {
-            content: "•";
-            position: absolute;
-            left: 0;
-            color: #f87171;
-            font-weight: bold;
-        }
-        
-        .preparation-tips {
-            background-color: #f0f9ff;
-            border: 1px solid #0ea5e9;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 24px 0;
-        }
-        
-        .preparation-tips h3 {
-            color: #0c4a6e;
-            font-size: 16px;
-            margin-bottom: 12px;
-            font-weight: 600;
-        }
-        
-        .preparation-tips ul {
-            list-style: none;
-            padding-left: 0;
-        }
-        
-        .preparation-tips li {
-            padding: 6px 0;
-            position: relative;
-            padding-left: 20px;
-            font-size: 14px;
-            color: #0c4a6e;
-        }
-        
-        .preparation-tips li::before {
-            content: "•";
-            position: absolute;
-            left: 0;
-            color: #0ea5e9;
-            font-weight: bold;
-        }
-        
-        .contact-info {
-            background-color: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 24px;
-            text-align: center;
-            margin: 24px 0;
-        }
-        
-        .contact-info h3 {
-            font-size: 16px;
-            color: #111827;
-            margin-bottom: 16px;
-            font-weight: 600;
-        }
-        
-        .contact-details {
-            display: flex;
-            justify-content: space-around;
-            flex-wrap: wrap;
-            gap: 16px;
-        }
-        
-        .contact-item {
-            text-align: center;
-        }
-        
-        .contact-item strong {
-            display: block;
-            margin-bottom: 4px;
-            font-size: 12px;
-            color: #6b7280;
-            font-weight: 500;
-        }
-        
-        .contact-item div {
-            font-size: 14px;
-            color: #111827;
-            font-weight: 500;
-        }
-        
-        .cta-button {
-            display: inline-block;
-            background-color: #3b82f6;
-            color: white;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 500;
-            margin: 16px 0;
-            font-size: 14px;
-        }
-        
-        .cta-button:hover {
-            background-color: #2563eb;
-        }
-        
-        .footer {
-            background-color: #f8fafc;
-            border-top: 1px solid #e5e7eb;
-            padding: 24px;
-            text-align: center;
-        }
-        
-        .footer p {
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: #6b7280;
-        }
-        
-        .footer a {
-            color: #3b82f6;
-            text-decoration: none;
-        }
-        
-        .footer a:hover {
-            text-decoration: underline;
-        }
-        
-        .logo {
-            font-size: 20px;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 8px;
-        }
-        
-        .success-icon {
-            font-size: 32px;
-            margin-bottom: 16px;
-        }
-        
-        @media (max-width: 600px) {
-            .email-container {
-                margin: 0;
-                border-radius: 0;
-                border: none;
-            }
-            
-            .header, .content, .footer {
-                padding: 20px;
-            }
-            
-            .contact-details {
-                flex-direction: column;
-            }
-            
-            .detail-row {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 4px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Appointment Confirmed</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f9fafb;
+      color: #111827;
+      margin: 0;
+      padding: 40px 16px;
+    }
+
+    .email-wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+    }
+
+    .header {
+      text-align: center;
+      padding: 40px 24px 32px;
+      background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .header .logo {
+      font-weight: 700;
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: #065f46;
+    }
+
+    .header .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #065f46;
+      margin-bottom: 6px;
+    }
+
+    .header p {
+      color: #065f46;
+      font-size: 15px;
+    }
+
+    .content {
+      padding: 32px 24px;
+    }
+
+    .greeting {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .highlight-card {
+      background-color: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin: 24px 0;
+    }
+
+    .highlight-card h2 {
+      font-size: 18px;
+      color: #065f46;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .highlight-card p {
+      color: #047857;
+      font-size: 14px;
+    }
+
+    .details {
+      margin: 32px 0;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      padding: 24px;
+    }
+
+    .details h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .detail {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 14px;
+    }
+
+    .detail:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: #6b7280;
+    }
+
+    .value {
+      font-weight: 500;
+    }
+
+    .badge {
+      display: inline-block;
+      background-color: #d1fae5;
+      color: #065f46;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .notes, .tips {
+      border-radius: 12px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+
+    .notes {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+    }
+
+    .notes h3 {
+      color: #991b1b;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .tips {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+    }
+
+    .tips h3 {
+      color: #1e3a8a;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .notes li, .tips li {
+      font-size: 14px;
+      line-height: 1.6;
+      padding-left: 18px;
+      position: relative;
+      color: #374151;
+    }
+
+    .notes li::before, .tips li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: #2563eb;
+    }
+
+    .cta {
+      display: inline-block;
+      text-decoration: none;
+      background-color: #2563eb;
+      color: white;
+      font-weight: 500;
+      border-radius: 8px;
+      padding: 12px 24px;
+      margin: 24px auto 0;
+      text-align: center;
+      transition: background-color 0.2s ease;
+    }
+
+    .cta:hover {
+      background-color: #1d4ed8;
+    }
+
+    .footer {
+      border-top: 1px solid #e5e7eb;
+      background: #f9fafb;
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .footer a {
+      color: #2563eb;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+      .detail {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="email-container">
-        <!-- Header -->
-        <div class="header">
-            <div class="logo">MedCare Clinic</div>
-            <div class="success-icon">✅</div>
-            <h1>Appointment Confirmed</h1>
-            <p>Your appointment has been successfully confirmed</p>
-        </div>
-        
-        <!-- Main Content -->
-        <div class="content">
-            <div class="greeting">
-                Hello {{patientName}},
-            </div>
-            
-            <p style="color: #6b7280; margin-bottom: 24px;">Great news! Your appointment has been confirmed and is ready to go. We're looking forward to seeing you at our clinic.</p>
-            
-            <!-- Status Card -->
-            <div class="status-card">
-                <h2>Appointment Confirmed</h2>
-                <p>Your appointment is confirmed and ready. Please arrive 15 minutes early.</p>
-            </div>
-            
-            <!-- Appointment Details -->
-            <div class="appointment-details">
-                <h3>Confirmed Appointment Details</h3>
-                
-                <div class="detail-row">
-                    <span class="detail-label">Patient Name</span>
-                    <span class="detail-value">{{patientName}}</span>
-                </div>
-                
-                <div class="detail-row">
-                    <span class="detail-label">Doctor</span>
-                    <span class="detail-value">{{doctorName}}</span>
-                </div>
-                
-                <div class="detail-row">
-                    <span class="detail-label">Date</span>
-                    <span class="detail-value">{{appointmentDate}}</span>
-                </div>
-                
-                <div class="detail-row">
-                    <span class="detail-label">Time</span>
-                    <span class="detail-value">{{appointmentTime}}</span>
-                </div>
-                
-                <div class="detail-row">
-                    <span class="detail-label">Reason</span>
-                    <span class="detail-value">{{appointmentReason}}</span>
-                </div>
-                
-                <div class="detail-row">
-                    <span class="detail-label">Status</span>
-                    <span class="detail-value">
-                        <span class="confirmed-badge">Confirmed</span>
-                    </span>
-                </div>
-            </div>
-            
-            <!-- Important Notes -->
-            <div class="important-notes">
-                <h3>Important Information</h3>
-                <ul>
-                    <li>Please arrive 15 minutes before your scheduled appointment time</li>
-                    <li>Bring a valid photo ID and insurance card (if applicable)</li>
-                    <li>If you need to reschedule, please call us at least 24 hours in advance</li>
-                    <li>Late arrivals may result in appointment rescheduling</li>
-                </ul>
-            </div>
-            
-            <!-- Preparation Tips -->
-            <div class="preparation-tips">
-                <h3>How to Prepare</h3>
-                <ul>
-                    <li>Write down any questions you have for the doctor</li>
-                    <li>Bring a list of current medications</li>
-                    <li>Prepare your medical history if it's your first visit</li>
-                    <li>Wear comfortable clothing for the examination</li>
-                </ul>
-            </div>
-            
-            <!-- Contact Information -->
-            <div class="contact-info">
-                <h3>Need to make changes?</h3>
-                <div class="contact-details">
-                    <div class="contact-item">
-                        <strong>Phone</strong>
-                        <div>+1 (555) 123-4567</div>
-                    </div>
-                    <div class="contact-item">
-                        <strong>Email</strong>
-                        <div>appointments@medcare.com</div>
-                    </div>
-                    <div class="contact-item">
-                        <strong>Website</strong>
-                        <div>www.medcare.com</div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <a href="#" class="cta-button">View Appointment Details</a>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Footer -->
-        <div class="footer">
-            <p><strong>MedCare Clinic</strong></p>
-            <p>123 Healthcare Street, Medical City, MC 12345</p>
-            <p>Phone: +1 (555) 123-4567 | Email: info@medcare.com</p>
-            <p>
-                <a href="#">Privacy Policy</a> | 
-                <a href="#">Terms of Service</a> | 
-                <a href="#">Unsubscribe</a>
-            </p>
-            <p style="margin-top: 16px; font-size: 12px; color: #9ca3af;">
-                This email was sent to {{patientEmail}}. Please do not reply to this email.
-            </p>
-        </div>
+  <div class="email-wrapper">
+    <div class="header">
+      <div class="logo">MedCare Clinic</div>
+      <div class="icon">✅</div>
+      <h1>Appointment Confirmed</h1>
+      <p>Your appointment has been successfully scheduled</p>
     </div>
+
+    <div class="content">
+      <p class="greeting">Hello {{patientName}},</p>
+      <p style="color:#374151; margin-bottom:20px;">We’re all set! Your appointment with <strong>{{doctorName}}</strong> has been confirmed. Please review your appointment details below.</p>
+
+      <div class="highlight-card">
+        <h2>You're Booked In!</h2>
+        <p>See you on <strong>{{appointmentDate}}</strong> at <strong>{{appointmentTime}}</strong>.</p>
+      </div>
+
+      <div class="details">
+        <h3>Appointment Details</h3>
+        <div class="detail"><span class="label">Patient</span><span class="value">{{patientName}}</span></div>
+        <div class="detail"><span class="label">Doctor</span><span class="value">{{doctorName}}</span></div>
+        <div class="detail"><span class="label">Date</span><span class="value">{{appointmentDate}}</span></div>
+        <div class="detail"><span class="label">Time</span><span class="value">{{appointmentTime}}</span></div>
+        <div class="detail"><span class="label">Reason</span><span class="value">{{appointmentReason}}</span></div>
+        <div class="detail"><span class="label">Status</span><span class="value"><span class="badge">Confirmed</span></span></div>
+      </div>
+
+      <div class="notes">
+        <h3>Before You Visit</h3>
+        <ul>
+          <li>Please arrive 15 minutes early for check-in.</li>
+          <li>Bring your ID and insurance card (if applicable).</li>
+          <li>Call us 24 hours in advance if you need to reschedule.</li>
+        </ul>
+      </div>
+
+      <div class="tips">
+        <h3>Preparation Tips</h3>
+        <ul>
+          <li>Bring any relevant medical reports or prescriptions.</li>
+          <li>List your current medications and dosages.</li>
+          <li>Prepare your questions for the doctor in advance.</li>
+        </ul>
+      </div>
+
+      <a href="#" class="cta">View Appointment →</a>
+    </div>
+
+    <div class="footer">
+      <p><strong>MedCare Clinic</strong></p>
+      <p>123 Healthcare Street, Medical City, MC 12345</p>
+      <p>📞 +1 (555) 123-4567 | ✉️ info@medcare.com</p>
+      <p><a href="#">Privacy Policy</a> • <a href="#">Unsubscribe</a></p>
+      <p style="margin-top: 12px; color: #9ca3af;">This email was sent to {{patientEmail}}. Please do not reply.</p>
+    </div>
+  </div>
 </body>
 </html>
