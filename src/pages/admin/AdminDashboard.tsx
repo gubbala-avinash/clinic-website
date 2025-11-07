@@ -1,20 +1,22 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { 
   Calendar, 
   Clock, 
   Search, 
   Plus, 
-  Filter, 
-  MoreVertical,
   CheckCircle,
   AlertCircle,
   XCircle,
   User,
   FileText,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react'
 import { appointmentsApi, doctorsApi, publicBookingApi, type Appointment, type Doctor } from '../../services/api'
 import { useToast, ToastContainer } from '../../components/ui/Toast'
+
+
 
 export function AdminDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -47,6 +49,30 @@ export function AdminDashboard() {
     loadDoctors()
   }, [])
 
+  // In src/pages/admin/AdminDashboard.tsx
+
+  const handleDeleteAppointment = async (appointment: Appointment) => {
+    // Updated confirmation message to be more explicit
+    if (window.confirm('Are you sure you want to PERMANENTLY DELETE this appointment? This action cannot be undone.')) {
+      try {
+        // STEP 1: Call the new backend endpoint
+        const response = await appointmentsApi.deleteAppointment(appointment.id);
+        
+        if (response.success) {
+          // STEP 2: If the database delete was successful,
+          // remove the card from the UI (the local state)
+          setAppointments(prev => prev.filter(apt => apt.id !== appointment.id));
+          success('Appointment Deleted', `${appointment.patientName}'s appointment has been permanently deleted.`);
+        } else {
+          // Show an error from the backend if it failed
+          error('Failed to delete appointment', response.message || 'Please try again');
+        }
+      } catch (err) {
+        error('Failed to delete appointment', 'Please check your connection');
+        console.error('Error deleting appointment:', err);
+      }
+    }
+  }
   const loadAppointments = async () => {
     try {
       setIsLoading(true)
@@ -309,19 +335,7 @@ export function AdminDashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Appointment Management</h1>
           <p className="text-gray-600">Manage patient appointments and schedules</p>
         </div>
-        <div className="flex gap-3">
-          <button className="btn-secondary inline-flex items-center">
-            <Filter className="w-4 h-4 mr-2" />
-            Filter
-          </button>
-          <button 
-            onClick={handleCreateBooking}
-            className="btn-primary inline-flex items-center"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Booking
-          </button>
-        </div>
+        
       </div>
 
 
@@ -418,13 +432,12 @@ export function AdminDashboard() {
             <Plus className="w-4 h-4 mr-2" />
             New Appointment
           </button>
-          <button 
-            onClick={() => window.location.href = '/admin/patients'}
-            className="btn-secondary inline-flex items-center justify-center"
-          >
-            <User className="w-4 h-4 mr-2" />
-            View Patients
-          </button>
+          <Link 
+          to="/admin/patients"
+          className="btn-secondary inline-flex items-center justify-center">
+          <User className="w-4 h-4 mr-2" />
+           View Patients
+          </Link>
           <button 
             onClick={() => window.location.href = '/admin/analytics'}
             className="btn-secondary inline-flex items-center justify-center"
@@ -564,9 +577,15 @@ export function AdminDashboard() {
                       </button>
                     )}
                     
-                    <button className="p-2 text-gray-400 hover:text-gray-600">
-                      <MoreVertical className="w-4 h-4" />
+                    <button 
+                      onClick={() => handleDeleteAppointment(appointment)}
+                      className="btn-secondary text-sm text-red-600 hover:text-red-700"
+                      title="Delete Appointment"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
                     </button>
+
                   </div>
                 </div>
               </div>

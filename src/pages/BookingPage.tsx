@@ -71,11 +71,7 @@ export function BookingPage() {
       return
     }
     
-    if (!form.email.trim()) {
-      setError('Please enter your email address')
-      setIsSubmitting(false)
-      return
-    }
+    
     
     if (!form.date) {
       setError('Please select a date')
@@ -98,7 +94,7 @@ export function BookingPage() {
     }
     
     // Phone validation (basic)
-    if (form.phone.length < 10) {
+    if (form.phone.length !== 10) {
       setError('Please enter a valid phone number')
       setIsSubmitting(false)
       return
