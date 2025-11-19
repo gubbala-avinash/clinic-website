@@ -422,6 +422,20 @@ app.post('/api/public/appointments', async (req, res) => {
         role: 'patient',
         password: hashedPassword,
         isActive: true
+      });let patientEmail = email;
+      if (!patientEmail) {
+        // Use phone number to create a unique, placeholder email
+        patientEmail = `${phone || Date.now()}@exapmle.com`;
+      }
+
+      patient = new User({
+        firstName: firstName,
+        lastName: lastName,
+        email: patientEmail,
+        phone: phone || '+91-0000000000',
+        role: 'patient',
+        password: hashedPassword,
+        isActive: true
       });
       await patient.save();
       console.log('Patient created successfully');
@@ -461,7 +475,7 @@ app.post('/api/public/appointments', async (req, res) => {
       patientId: patient._id,
       doctorId: doctor._id,
       scheduledAt: new Date(`${date}T${time}:00`),
-      status: 'scheduled',
+      status: 'confirmed',
       reason: reason || 'General consultation',
       createdBy: patient._id // Use patient ID as creator for public bookings
     });
@@ -697,19 +711,22 @@ app.patch('/api/appointments/:id', async (req, res) => {
     console.log('Appointment updated successfully');
     
     // Populate the response
+    // Populate the response
     await appointment.populate('patientId', 'firstName lastName email phone');
     await appointment.populate('doctorId', 'firstName lastName email');
     
+    // --- THIS IS THE FIX ---
+    // Use optional chaining (?.) to prevent crashes if patientId or doctorId is not populated
     const formattedAppointment = {
       id: appointment._id,
-      patientName: `${appointment.patientId.firstName} ${appointment.patientId.lastName}`,
-      doctorName: `Dr. ${appointment.doctorId.firstName} ${appointment.doctorId.lastName}`,
+      patientName: `${appointment.patientId?.firstName || 'Unknown'} ${appointment.patientId?.lastName || 'Patient'}`,
+      doctorName: `Dr. ${appointment.doctorId?.firstName || 'Unknown'} ${appointment.doctorId?.lastName || 'Doctor'}`,
       date: appointment.scheduledAt.toISOString().split('T')[0],
       time: appointment.scheduledAt.toTimeString().split(' ')[0].substring(0, 5),
       status: appointment.status,
       reason: appointment.reason,
-      phone: appointment.patientId.phone,
-      email: appointment.patientId.email
+      phone: appointment.patientId?.phone || 'N/A',
+      email: appointment.patientId?.email || 'N/A'
     };
     
     res.json({

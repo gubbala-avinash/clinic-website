@@ -38,8 +38,8 @@ export interface Appointment {
   doctorName: string;
   date: string;
   time: string;
-  status: 'scheduled' | 'confirmed' | 'attended' | 'not-attended' | 'checked-in' | 'completed' | 'cancelled' | 'in-progress'| 'waiting';
   reason: string;
+  status: 'scheduled' | 'confirmed' | 'attended' | 'not-attended' | 'cancelled';
   phone: string;
   email: string;
   prescriptionId?: string;

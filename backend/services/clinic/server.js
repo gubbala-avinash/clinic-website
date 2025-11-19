@@ -327,7 +327,7 @@ app.post('/api/public/appointments', async (req, res) => {
       patientId: patient._id,
       doctorId: doctor._id,
       scheduledAt: new Date(`${date}T${time}:00`),
-      status: 'scheduled',
+      status: 'confirmed',
       reason: reason || 'General consultation',
       createdBy: patient._id // Use patient ID as creator for public bookings
     });
